@@ -61,3 +61,12 @@ Thumbs.db
 
 # Optional Next.js telemetry
 .next-telemetry
+
+# Server specific
+/server/node_modules
+/server/dist
+/server/build
+/server/logs
+/server/*.log
+/server/.env
+/server/.env.*
