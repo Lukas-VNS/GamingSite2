@@ -23,12 +23,16 @@ interface GameState {
     X: string | null; // socket.id of X player
     O: string | null; // socket.id of O player
   };
+  readyStatus: {
+    X: boolean;
+    O: boolean;
+  };
   timers: {
     X: number; // Time in seconds
     O: number;
   };
   timerInterval: NodeJS.Timeout | null;
-  gameStatus: 'active' | 'ended' | 'draw';
+  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
   winner: 'X' | 'O' | null;
   disconnectTimers: {
     X: NodeJS.Timeout | null;
@@ -37,30 +41,22 @@ interface GameState {
 }
 
 const games: Record<string, GameState> = {};
-const INITIAL_TIME = 300; // 5 minutes in seconds
+const INITIAL_TIME = 60; // 1 minute in seconds
 const DISCONNECT_TIMEOUT = 30; // 30 seconds to reconnect
 
 // Initialize a game if it doesn't exist
 function initializeGame(gameId: string) {
   if (!games[gameId]) {
     games[gameId] = {
+      players: { X: null, O: null },
+      readyStatus: { X: false, O: false },
       squares: Array(9).fill(null),
       nextPlayer: 'X',
-      players: {
-        X: null,
-        O: null
-      },
-      timers: {
-        X: INITIAL_TIME,
-        O: INITIAL_TIME
-      },
+      timers: { X: 60, O: 60 },
       timerInterval: null,
-      gameStatus: 'active',
+      gameStatus: 'waiting',
       winner: null,
-      disconnectTimers: {
-        X: null,
-        O: null
-      }
+      disconnectTimers: { X: null, O: null }
     };
   }
 }
@@ -85,12 +81,16 @@ function resetGame(gameId: string) {
       ...games[gameId],
       squares: Array(9).fill(null),
       nextPlayer: 'X',
+      readyStatus: {
+        X: false,
+        O: false
+      },
       timers: {
         X: INITIAL_TIME,
         O: INITIAL_TIME
       },
       timerInterval: null,
-      gameStatus: 'active',
+      gameStatus: 'waiting',
       winner: null,
       disconnectTimers: {
         X: null,
@@ -98,13 +98,11 @@ function resetGame(gameId: string) {
       }
     };
     
-    // Start timer for player X (always starts first)
-    startTimer(gameId);
-    
     // Broadcast the reset game state
     io.to(gameId).emit('game_update', {
       squares: games[gameId].squares,
       nextPlayer: games[gameId].nextPlayer,
+      readyStatus: games[gameId].readyStatus,
       timers: games[gameId].timers,
       gameStatus: games[gameId].gameStatus,
       winner: games[gameId].winner
@@ -112,116 +110,133 @@ function resetGame(gameId: string) {
   }
 }
 
+// Fix the checkGameStart function to focus on ready status, not current connections
+function checkGameStart(gameId: string) {
+  const game = games[gameId];
+  if (!game) return;
+  
+  console.log(`[GAME START CHECK] Game ${gameId}:`);
+  console.log(`- X Ready: ${game.readyStatus.X}`);
+  console.log(`- O Ready: ${game.readyStatus.O}`);
+  console.log(`- Game status: ${game.gameStatus}`);
+  
+  // IMPORTANT: Only check ready status, not current connections
+  if (game.readyStatus.X && game.readyStatus.O && game.gameStatus === 'waiting') {
+    console.log(`[GAME START] Starting game ${gameId}!`);
+    
+    // Start the game
+    game.gameStatus = 'active';
+    game.nextPlayer = 'X'; // Ensure X goes first
+    
+    // Broadcast the updated game state to all connected clients
+    io.to(gameId).emit('game_update', {
+      squares: game.squares,
+      nextPlayer: game.nextPlayer,
+      readyStatus: game.readyStatus,
+      timers: game.timers,
+      gameStatus: game.gameStatus,
+      winner: game.winner
+    });
+    
+    console.log(`[GAME START] Game ${gameId} started successfully!`);
+  }
+}
+
 // Start the timer for the current player
 function startTimer(gameId: string) {
   const game = games[gameId];
-  if (!game || game.gameStatus !== 'active') return;
+  if (!game) return;
+  
+  console.log(`[TIMER] Starting timer for game ${gameId}`);
   
   // Clear any existing interval
   if (game.timerInterval) {
     clearInterval(game.timerInterval);
-    game.timerInterval = null;
   }
   
-  // Start a new interval
+  // Set up a new interval to countdown player time
   game.timerInterval = setInterval(() => {
-    // Decrement the current player's timer
+    // Reduce the time of the current player
     game.timers[game.nextPlayer]--;
     
-    // Check if timer ran out
+    // Send timer update to clients
+    io.to(gameId).emit('timer_update', { timers: game.timers });
+    
+    // Check if time ran out
     if (game.timers[game.nextPlayer] <= 0) {
-      // Time's up! Current player loses
-      clearInterval(game.timerInterval as NodeJS.Timeout);
+      // Player lost due to timeout
+      if (game.timerInterval) {
+        clearInterval(game.timerInterval);
+      }
       game.timerInterval = null;
       game.gameStatus = 'ended';
       game.winner = game.nextPlayer === 'X' ? 'O' : 'X';
       
-      // Broadcast the result
+      // Send game over notification
       io.to(gameId).emit('game_update', {
         squares: game.squares,
         nextPlayer: game.nextPlayer,
+        readyStatus: game.readyStatus,
         timers: game.timers,
         gameStatus: game.gameStatus,
         winner: game.winner,
         winReason: 'timeout'
       });
-    } else {
-      // Just update the timers
-      io.to(gameId).emit('timer_update', {
-        timers: game.timers
-      });
     }
-  }, 1000); // Update every second
+  }, 1000);
 }
 
 // Assign player symbol (X or O)
 function assignPlayerToGame(gameId: string, socketId: string) {
-  initializeGame(gameId);
-  
   const game = games[gameId];
+  if (!game) return null;
   
-  // Clear disconnect timer if player is rejoining
-  if (game.players.X === null && game.disconnectTimers.X) {
-    clearTimeout(game.disconnectTimers.X);
-    game.disconnectTimers.X = null;
-  } else if (game.players.O === null && game.disconnectTimers.O) {
-    clearTimeout(game.disconnectTimers.O);
-    game.disconnectTimers.O = null;
-  }
+  // Check if this socket ID already had a position (reconnecting)
+  if (game.players.X === socketId) return 'X';
+  if (game.players.O === socketId) return 'O';
   
   // If X is not assigned, assign X
   if (game.players.X === null) {
     game.players.X = socketId;
-    
-    // Start timer if both players are connected and game is active
-    if (game.players.O && game.gameStatus === 'active' && !game.timerInterval) {
-      startTimer(gameId);
-    }
-    
     return 'X';
   }
-  // If X is assigned but not to this socket, and O is not assigned, assign O
-  else if (game.players.X !== socketId && game.players.O === null) {
+  // If O is not assigned, assign O
+  else if (game.players.O === null) {
     game.players.O = socketId;
-    
-    // Start timer if game is active and not started yet
-    if (game.gameStatus === 'active' && !game.timerInterval) {
-      startTimer(gameId);
-    }
-    
-    return 'O';
-  }
-  // Player is already in the game
-  else if (game.players.X === socketId) {
-    return 'X';
-  }
-  else if (game.players.O === socketId) {
     return 'O';
   }
   
-  // Game is full or other error
+  // Both positions filled
   return null;
 }
 
-// Count players in a game
+// Count how many players are in a specific game
 function countPlayersInGame(gameId: string): number {
-  if (!games[gameId]) return 0;
+  const game = games[gameId];
+  if (!game) return 0;
   
   let count = 0;
-  if (games[gameId].players.X) count++;
-  if (games[gameId].players.O) count++;
+  if (game.players.X) count++;
+  if (game.players.O) count++;
+  
   return count;
 }
 
-// Check if game has a winner
+// Helper function to check if there's a winner
 function checkWinner(squares: Array<'X' | 'O' | null>): 'X' | 'O' | null {
   const lines = [
-    [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
-    [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
-    [0, 4, 8], [2, 4, 6]             // Diagonals
+    [0, 1, 2],
+    [3, 4, 5],
+    [6, 7, 8],
+    [0, 3, 6],
+    [1, 4, 7],
+    [2, 5, 8],
+    [0, 4, 8],
+    [2, 4, 6],
   ];
   
-  for (const [a, b, c] of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const [a, b, c] = lines[i];
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
       return squares[a];
     }
@@ -251,21 +266,31 @@ io.on('connection', (socket) => {
     // Initialize game if needed
     initializeGame(gameId);
     
-    // Assign player to game (X or O)
+    // Assign player to game
     const playerSymbol = assignPlayerToGame(gameId, socket.id);
     const playersConnected = countPlayersInGame(gameId);
     
-    // Send player assignment back to client
+    // IMPORTANT: Check if game should be active already
+    if (games[gameId].readyStatus.X && games[gameId].readyStatus.O && 
+        games[gameId].gameStatus === 'waiting') {
+      
+      console.log(`⭐ Player rejoining - Both already ready! Starting game ${gameId} ⭐`);
+      games[gameId].gameStatus = 'active';
+      games[gameId].nextPlayer = 'X';
+    }
+    
+    // Send player assignment
     if (playerSymbol) {
       socket.emit('player_assigned', { 
         player: playerSymbol, 
         playersConnected,
+        readyStatus: games[gameId].readyStatus,
         gameStatus: games[gameId].gameStatus,
         winner: games[gameId].winner
       });
     }
     
-    // Broadcast player count update to all clients in the game
+    // Broadcast player count update to all players in this game
     io.to(gameId).emit('players_update', { count: playersConnected });
     
     // If game exists, send current game state
@@ -273,6 +298,44 @@ io.on('connection', (socket) => {
       io.to(gameId).emit('game_update', {
         squares: games[gameId].squares,
         nextPlayer: games[gameId].nextPlayer,
+        readyStatus: games[gameId].readyStatus,
+        timers: games[gameId].timers,
+        gameStatus: games[gameId].gameStatus,
+        winner: games[gameId].winner
+      });
+    }
+  });
+  
+  // Handle player ready status
+  socket.on('player_ready', ({ gameId, player }: { gameId: string, player: 'X' | 'O' }) => {
+    console.log(`Player ${player} is ready in game ${gameId}`);
+    
+    if (!games[gameId]) return;
+    
+    // Mark player as ready
+    games[gameId].readyStatus[player] = true;
+    
+    // Log ready status for debugging
+    console.log(`READY STATUS - X: ${games[gameId].readyStatus.X}, O: ${games[gameId].readyStatus.O}`);
+    
+    // Broadcast ready status update
+    io.to(gameId).emit('ready_update', {
+      readyStatus: games[gameId].readyStatus
+    });
+    
+    // CRITICAL FIX: Check if both players are ready and force start the game
+    if (games[gameId].readyStatus.X && games[gameId].readyStatus.O) {
+      console.log(`⭐ BOTH PLAYERS READY! Starting game ${gameId} ⭐`);
+      
+      // Force game to active state
+      games[gameId].gameStatus = 'active';
+      games[gameId].nextPlayer = 'X';
+      
+      // Send game start to everyone
+      io.to(gameId).emit('game_update', {
+        squares: games[gameId].squares,
+        nextPlayer: games[gameId].nextPlayer,
+        readyStatus: games[gameId].readyStatus,
         timers: games[gameId].timers,
         gameStatus: games[gameId].gameStatus,
         winner: games[gameId].winner
@@ -328,6 +391,7 @@ io.on('connection', (socket) => {
       io.to(gameId).emit('game_update', {
         squares: game.squares,
         nextPlayer: game.nextPlayer,
+        readyStatus: game.readyStatus,
         timers: game.timers,
         gameStatus: game.gameStatus,
         winner: game.winner
@@ -354,87 +418,29 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     
-    // Find games this user was in
-    for (const gameId in games) {
+    // Find if this socket was assigned to any game
+    Object.keys(games).forEach(gameId => {
       const game = games[gameId];
       
-      // Handle player X disconnect
+      // Check if this was player X
       if (game.players.X === socket.id) {
+        // Just set the player socket to null
+        game.players.X = null;
+        
+        // Broadcast that a player disconnected
+        io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
+        
         console.log(`Player X disconnected from game ${gameId}`);
-        
-        // If game is active, start a disconnect timer
-        if (game.gameStatus === 'active') {
-          game.disconnectTimers.X = setTimeout(() => {
-            // Player didn't reconnect in time, they lose
-            game.gameStatus = 'ended';
-            game.winner = 'O';
-            
-            // Stop game timer
-            if (game.timerInterval) {
-              clearInterval(game.timerInterval);
-              game.timerInterval = null;
-            }
-            
-            // Broadcast the forfeit
-            io.to(gameId).emit('game_update', {
-              squares: game.squares,
-              nextPlayer: game.nextPlayer,
-              timers: game.timers,
-              gameStatus: game.gameStatus,
-              winner: game.winner,
-              winReason: 'disconnect'
-            });
-            
-            // Mark the player as fully disconnected
-            game.players.X = null;
-            io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
-            
-          }, DISCONNECT_TIMEOUT * 1000);
-        } else {
-          // If game is already over, just mark them as disconnected
-          game.players.X = null;
-          io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
-        }
       }
-      // Handle player O disconnect
+      
+      // Same for player O
       else if (game.players.O === socket.id) {
-        console.log(`Player O disconnected from game ${gameId}`);
+        game.players.O = null;
+        io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
         
-        // If game is active, start a disconnect timer
-        if (game.gameStatus === 'active') {
-          game.disconnectTimers.O = setTimeout(() => {
-            // Player didn't reconnect in time, they lose
-            game.gameStatus = 'ended';
-            game.winner = 'X';
-            
-            // Stop game timer
-            if (game.timerInterval) {
-              clearInterval(game.timerInterval);
-              game.timerInterval = null;
-            }
-            
-            // Broadcast the forfeit
-            io.to(gameId).emit('game_update', {
-              squares: game.squares,
-              nextPlayer: game.nextPlayer,
-              timers: game.timers,
-              gameStatus: game.gameStatus,
-              winner: game.winner,
-              winReason: 'disconnect'
-            });
-            
-            // Mark the player as fully disconnected
-            game.players.O = null;
-            io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
-            
-          }, DISCONNECT_TIMEOUT * 1000);
-        } else {
-          // If game is already over, just mark them as disconnected
-          game.players.O = null;
-          io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
-        }
+        console.log(`Player O disconnected from game ${gameId}`);
       }
-    }
+    });
   });
 });
 

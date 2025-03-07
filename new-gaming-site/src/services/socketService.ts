@@ -3,13 +3,24 @@ import { io, Socket } from 'socket.io-client';
 interface GameUpdateData {
   squares: Array<'X' | 'O' | null>;
   nextPlayer: 'X' | 'O';
+  readyStatus: {
+    X: boolean;
+    O: boolean;
+  };
   timers: {
     X: number;
     O: number;
   };
-  gameStatus: 'active' | 'ended' | 'draw';
+  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
   winner: 'X' | 'O' | null;
   winReason?: 'timeout' | 'disconnect';
+}
+
+interface ReadyUpdateData {
+  readyStatus: {
+    X: boolean;
+    O: boolean;
+  };
 }
 
 interface TimerUpdateData {
@@ -22,7 +33,11 @@ interface TimerUpdateData {
 interface PlayerAssignedData {
   player: 'X' | 'O';
   playersConnected: number;
-  gameStatus: 'active' | 'ended' | 'draw';
+  readyStatus: {
+    X: boolean;
+    O: boolean;
+  };
+  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
   winner: 'X' | 'O' | null;
 }
 
@@ -64,6 +79,16 @@ class SocketService {
     }
   }
 
+  // Make sure this function exists and works correctly
+  setPlayerReady(gameId: string, player: 'X' | 'O'): void {
+    if (this.socket) {
+      console.log(`Emitting player_ready for ${player} in game ${gameId}`);
+      this.socket.emit('player_ready', { gameId, player });
+    } else {
+      console.error('Socket not connected');
+    }
+  }
+
   makeMove(gameId: string, position: number, player: 'X' | 'O'): void {
     if (this.socket) {
       this.socket.emit('make_move', { gameId, position, player });
@@ -88,6 +113,12 @@ class SocketService {
     }
   }
 
+  onReadyUpdate(callback: (data: ReadyUpdateData) => void): void {
+    if (this.socket) {
+      this.socket.on('ready_update', callback);
+    }
+  }
+
   onGameUpdate(callback: (data: GameUpdateData) => void): void {
     if (this.socket) {
       this.socket.on('game_update', callback);
@@ -104,6 +135,7 @@ class SocketService {
     if (this.socket) {
       this.socket.off('player_assigned');
       this.socket.off('players_update');
+      this.socket.off('ready_update');
       this.socket.off('game_update');
       this.socket.off('timer_update');
     }
