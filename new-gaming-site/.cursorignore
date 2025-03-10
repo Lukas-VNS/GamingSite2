@@ -1,5 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
 /.pnp
@@ -57,23 +55,3 @@ next-env.d.ts
 /server/*.log
 /server/.env
 /server/.env.*
-
-# Authentication and Security
-/server/src/config/auth.config.js
-/server/src/config/auth.config.ts
-/server/src/config/jwt.config.js
-/server/src/config/jwt.config.ts
-*.key
-*.pem
-*.cert
-*.crt
-/server/certs/
-/server/keys/
-/server/secrets/
-
-# Sensitive configuration files
-**/config/secrets.ts
-**/config/secrets.js
-**/config/credentials.*
-**/config/*.key
-**/config/*.pem
