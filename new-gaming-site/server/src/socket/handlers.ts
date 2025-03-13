@@ -4,156 +4,199 @@ import {
   initializeGame, 
   resetGame, 
   assignPlayerToGame, 
-  countPlayersInGame 
+  countPlayersInGame,
+  broadcastGameState 
 } from '../game/gameState';
 import { checkGameStart, checkWinner, startTimer } from '../game/gameLogic';
 import { PlayerSymbol } from '../types';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+const playerQueue: { socketId: string; userId: string }[] = [];
+let currentGameId = 0; // Keep track of the last game ID
 
 export function setupSocketHandlers(io: Server, socket: Socket) {
-  console.log('\n\nA New user connected:', socket.id, '\n\n');
+  console.log('A new user connected:', socket.id);
+  console.log('Auth token:', socket.handshake.auth.token);
   
-  // Handle joining a game room
-  socket.on('join_game', (gameId) => {
-    socket.join(gameId);
-    console.log(`User ${socket.id} joined game: ${gameId}`);
+  socket.on('join_queue', () => {
+    console.log(`User ${socket.id} joining queue`);
+    console.log('Current queue length:', playerQueue.length);
+    console.log('Current queue:', playerQueue);
     
-    // Initialize game if needed
-    initializeGame(gameId);
-    
-    // Assign player to game
-    const playerSymbol = assignPlayerToGame(gameId, socket.id);
-    const playersConnected = countPlayersInGame(gameId);
-    
-    // Check if game should be active already
-    if (games[gameId].readyStatus.X && games[gameId].readyStatus.O && 
-        games[gameId].gameStatus === 'waiting') {
-      
-      console.log(`⭐ Player rejoining - Both already ready! Starting game ${gameId} ⭐`);
-      games[gameId].gameStatus = 'active';
-      games[gameId].nextPlayer = 'X';
+    if (playerQueue.some(p => p.socketId === socket.id)) {
+      console.log(`User ${socket.id} already in queue`);
+      socket.emit('queue_error', 'Already in queue');
+      return;
     }
     
-    // Send player assignment
+    const token = socket.handshake.auth.token;
+    console.log('Received token:', token);
+    
+    if (!token) {
+      console.log(`User ${socket.id} not authenticated`);
+      socket.emit('queue_error', 'Not authenticated');
+      return;
+    }
+    
+    playerQueue.push({ socketId: socket.id, userId: token });
+    console.log(`Added user ${socket.id} to queue. New queue length:`, playerQueue.length);
+    socket.emit('queue_joined');
+    
+    if (playerQueue.length >= 2) {
+      console.log('Found 2 players, creating game...');
+      const player1 = playerQueue.shift()!;
+      const player2 = playerQueue.shift()!;
+      
+      // Create new game in database
+      prisma.game.create({
+        data: {
+          squares: Array(9).fill(null),
+          nextPlayer: 'X',
+          gameStatus: 'waiting'
+        }
+      }).then(game => {
+        console.log(`Created game ${game.id} for players:`, player1.socketId, player2.socketId);
+        currentGameId = game.id;
+        initializeGame(game.id.toString());
+        
+        io.to(player1.socketId).emit('game_created', game.id);
+        io.to(player2.socketId).emit('game_created', game.id);
+        console.log('Game creation notifications sent');
+      });
+    }
+  });
+  
+  socket.on('join_game', (gameId: number) => {
+    console.log(`User ${socket.id} joining game: ${gameId}`);
+    socket.join(gameId.toString());
+    
+    initializeGame(gameId.toString());
+    const playerSymbol = assignPlayerToGame(gameId.toString(), socket.id);
+    const playersConnected = countPlayersInGame(gameId.toString());
+    
+    console.log(`Player ${socket.id} assigned as ${playerSymbol}`);
+    
     if (playerSymbol) {
-      socket.emit('player_assigned', { 
-        player: playerSymbol, 
-        playersConnected,
-        readyStatus: games[gameId].readyStatus,
-        gameStatus: games[gameId].gameStatus,
-        winner: games[gameId].winner
-      });
-    }
-    
-    // Broadcast player count update to all players in this game
-    io.to(gameId).emit('players_update', { count: playersConnected });
-    
-    // If game exists, send current game state
-    if (games[gameId]) {
-      io.to(gameId).emit('game_update', {
-        squares: games[gameId].squares,
-        nextPlayer: games[gameId].nextPlayer,
-        readyStatus: games[gameId].readyStatus,
-        timers: games[gameId].timers,
-        gameStatus: games[gameId].gameStatus,
-        winner: games[gameId].winner
-      });
-    }
-  });
-  
-  // Handle player ready status
-  socket.on('player_ready', ({ gameId, player }: { gameId: string, player: PlayerSymbol }) => {
-    console.log(`Player ${player} is ready in game ${gameId}`);
-    
-    if (!games[gameId]) return;
-    
-    // Mark player as ready
-    games[gameId].readyStatus[player] = true;
-    
-    // Log ready status for debugging
-    console.log(`READY STATUS - X: ${games[gameId].readyStatus.X}, O: ${games[gameId].readyStatus.O}`);
-    
-    // Broadcast ready status update
-    io.to(gameId).emit('ready_update', {
-      readyStatus: games[gameId].readyStatus
-    });
-    
-    // CRITICAL FIX: Check if both players are ready and force start the game
-    if (games[gameId].readyStatus.X && games[gameId].readyStatus.O) {
-      console.log(`⭐ BOTH PLAYERS READY! Starting game ${gameId} ⭐`);
-      
-      // Force game to active state
-      games[gameId].gameStatus = 'active';
-      games[gameId].nextPlayer = 'X';
-      
-      // Send game start to everyone
-      io.to(gameId).emit('game_update', {
-        squares: games[gameId].squares,
-        nextPlayer: games[gameId].nextPlayer,
-        readyStatus: games[gameId].readyStatus,
-        timers: games[gameId].timers,
-        gameStatus: games[gameId].gameStatus,
-        winner: games[gameId].winner
-      });
-    }
-  });
-  
-  // Handle game move
-  socket.on('make_move', ({ gameId, position, player }: { gameId: string, position: number, player: PlayerSymbol }) => {
-    console.log(`Move received: ${player} at position ${position} in game ${gameId}`);
-    const game = games[gameId];
-    
-    // Verify it's a valid move, the correct player's turn, and game is active
-    if (
-      game && 
-      game.gameStatus === 'active' &&
-      game.nextPlayer === player &&
-      game.squares[position] === null
-    ) {
-      // Update game state
-      game.squares[position] = player;
-      
-      // Check for winner or draw
-      const winner = checkWinner(game.squares);
-      const isDraw = !winner && game.squares.every(square => square !== null);
-      
-      if (winner) {
-        game.gameStatus = 'ended';
-        game.winner = winner;
+      const game = games[gameId.toString()];
+      if (game) {
+        // Keep game in 'waiting' state until both players are ready
+        game.gameStatus = 'waiting';
         
-        // Stop the timer
-        if (game.timerInterval) {
-          clearInterval(game.timerInterval);
-          game.timerInterval = null;
+        // Emit player assignment
+        socket.emit('player_assigned', { 
+          player: playerSymbol, 
+          playersConnected,
+          readyStatus: game.readyStatus,
+          gameStatus: game.gameStatus,
+          winner: null
+        });
+        
+        // Broadcast updated state to all players
+        io.to(gameId.toString()).emit('players_update', { count: playersConnected });
+        io.to(gameId.toString()).emit('game_update', {
+          id: gameId,
+          squares: game.squares,
+          nextPlayer: game.nextPlayer,
+          gameStatus: game.gameStatus,
+          winner: game.winner,
+          readyStatus: game.readyStatus,
+          players: game.players
+        });
+
+        // If both players are connected, set them as ready and start the game
+        if (playersConnected === 2) {
+          game.readyStatus = { X: true, O: true };
+          game.gameStatus = 'active';
+          game.nextPlayer = 'X';
+          
+          // Broadcast the final game state
+          io.to(gameId.toString()).emit('game_update', {
+            id: gameId,
+            squares: game.squares,
+            nextPlayer: game.nextPlayer,
+            gameStatus: game.gameStatus,
+            winner: game.winner,
+            readyStatus: game.readyStatus,
+            players: game.players
+          });
         }
-      } else if (isDraw) {
-        game.gameStatus = 'draw';
-        
-        // Stop the timer
-        if (game.timerInterval) {
-          clearInterval(game.timerInterval);
-          game.timerInterval = null;
-        }
-      } else {
-        // Switch player turn
-        game.nextPlayer = player === 'X' ? 'O' : 'X';
-        
-        // Restart the timer for the next player
-        startTimer(gameId, io);
       }
-      
-      // Broadcast updated game state to all clients in the game
-      io.to(gameId).emit('game_update', {
-        squares: game.squares,
-        nextPlayer: game.nextPlayer,
-        readyStatus: game.readyStatus,
-        timers: game.timers,
-        gameStatus: game.gameStatus,
-        winner: game.winner
-      });
     }
   });
   
-  // Handle reset game request
+  socket.on('leave_queue', () => {
+    console.log(`User ${socket.id} leaving queue`);
+    const index = playerQueue.findIndex(p => p.socketId === socket.id);
+    if (index !== -1) {
+      playerQueue.splice(index, 1);
+    }
+  });
+  
+  socket.on('make_move', ({ gameId, position, player }: { gameId: string, position: number, player: PlayerSymbol }) => {
+    console.log(`Move attempt: ${player} at position ${position} in game ${gameId}`);
+    
+    const game = games[gameId];
+    if (!game) {
+      console.log('Game not found');
+      return;
+    }
+    
+    // Validate that the socket ID matches the player
+    if (game.players[player] !== socket.id) {
+      console.log('Invalid player move attempt - wrong socket ID');
+      return;
+    }
+
+    // Validate that it's the player's turn
+    if (game.nextPlayer !== player) {
+      console.log('Invalid player move attempt - not your turn');
+      return;
+    }
+
+    // Validate that the position is valid and empty
+    if (position < 0 || position > 8 || game.squares[position] !== null) {
+      console.log('Invalid player move attempt - invalid position or square taken');
+      return;
+    }
+
+    // Validate that the game is active
+    if (game.gameStatus !== 'active') {
+      console.log('Invalid player move attempt - game not active');
+      return;
+    }
+    
+    // Make the move
+    game.squares[position] = player;
+    
+    // Check for winner or draw
+    const winner = checkWinner(game.squares);
+    const isDraw = !winner && game.squares.every(square => square !== null);
+    
+    if (winner) {
+      game.gameStatus = 'ended';
+      game.winner = winner;
+      console.log(`Game ${gameId} won by ${winner}`);
+    } else if (isDraw) {
+      game.gameStatus = 'draw';
+      console.log(`Game ${gameId} ended in draw`);
+    } else {
+      game.nextPlayer = player === 'X' ? 'O' : 'X';
+      console.log(`Next turn: ${game.nextPlayer}`);
+    }
+    
+    // Broadcast the updated game state
+    io.to(gameId).emit('game_update', {
+      id: parseInt(gameId),
+      squares: game.squares,
+      nextPlayer: game.nextPlayer,
+      gameStatus: game.gameStatus,
+      winner: game.winner,
+      readyStatus: game.readyStatus,
+      players: game.players
+    });
+  });
+  
   socket.on('reset_game', (gameId) => {
     const game = games[gameId];
     
@@ -161,7 +204,6 @@ export function setupSocketHandlers(io: Server, socket: Socket) {
       const playerSymbol = game.players.X === socket.id ? 'X' : 
                           game.players.O === socket.id ? 'O' : null;
       
-      // Only allow players in the game to reset it, and only after it ended
       if (playerSymbol && (game.gameStatus === 'ended' || game.gameStatus === 'draw')) {
         resetGame(gameId, io);
         console.log(`Game ${gameId} reset by ${playerSymbol}`);
@@ -169,31 +211,29 @@ export function setupSocketHandlers(io: Server, socket: Socket) {
     }
   });
 
-  // Handle disconnection
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     
-    // Find if this socket was assigned to any game
+    const queueIndex = playerQueue.findIndex(p => p.socketId === socket.id);
+    if (queueIndex !== -1) {
+      playerQueue.splice(queueIndex, 1);
+    }
+    
     Object.keys(games).forEach(gameId => {
       const game = games[gameId];
       
-      // Check if this was player X
-      if (game.players.X === socket.id) {
-        // Just set the player socket to null
-        game.players.X = null;
+      if (game.players.X === socket.id || game.players.O === socket.id) {
+        const playerSymbol = game.players.X === socket.id ? 'X' : 'O';
+        game.players[playerSymbol] = null;
+        game.readyStatus[playerSymbol] = false;
         
-        // Broadcast that a player disconnected
+        if (game.gameStatus === 'active') {
+          game.gameStatus = 'ended';
+          game.winner = playerSymbol === 'X' ? 'O' : 'X';
+        }
+        
         io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
-        
-        console.log(`Player X disconnected from game ${gameId}`);
-      }
-      
-      // Same for player O
-      else if (game.players.O === socket.id) {
-        game.players.O = null;
-        io.to(gameId).emit('players_update', { count: countPlayersInGame(gameId) });
-        
-        console.log(`Player O disconnected from game ${gameId}`);
+        broadcastGameState(gameId, io);
       }
     });
   });

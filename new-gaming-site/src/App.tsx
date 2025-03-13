@@ -4,6 +4,7 @@ import './App.css';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
 import MultiplayerGamePage from './pages/MultiplayerGamePage';
+import GameRoom from './pages/GameRoom';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import TicTacToePage from './pages/TicTacToePage';
@@ -34,6 +35,11 @@ function App() {
           <Route path="/tictactoe/multiplayer" element={
             <ProtectedRoute>
               <MultiplayerGamePage />
+            </ProtectedRoute>
+          } />
+          <Route path="/tictactoe/multiplayer/game/:gameId" element={
+            <ProtectedRoute>
+              <GameRoom />
             </ProtectedRoute>
           } />
         </Routes>

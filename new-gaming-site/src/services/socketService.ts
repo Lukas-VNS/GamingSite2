@@ -1,4 +1,5 @@
-import { io, Socket } from 'socket.io-client';
+import io from 'socket.io-client';
+import { Socket } from 'socket.io-client';
 
 interface GameUpdateData {
   squares: Array<'X' | 'O' | null>;
@@ -46,22 +47,21 @@ interface PlayersUpdateData {
 }
 
 class SocketService {
-  private socket: Socket | null = null;
-  private readonly serverUrl = 'http://localhost:8080';
+  private socket: typeof Socket | null = null;
+  private readonly serverUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
   connect(): void {
     console.log('Attempting to connect to:', this.serverUrl);
     this.socket = io(this.serverUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5
+      path: '/socket.io',
+      transports: ['websocket', 'polling']
     });
     
     this.socket.on('connect', () => {
       console.log('Connected to server with ID:', this.socket?.id);
     });
     
-    this.socket.on('connect_error', (error) => {
+    this.socket.on('connect_error', (error: Error) => {
       console.error('Connection error details:', error);
     });
   }

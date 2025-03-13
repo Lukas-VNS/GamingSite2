@@ -11,15 +11,21 @@ datasource db {
 }
 
 model Game {
-  id            String    @id @default(uuid())
+  id            Int       @id @default(autoincrement())
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   squares       Json      // Stores the game board state
   nextPlayer    String    // 'X' or 'O'
-  gameStatus    String    // 'waiting', 'active', 'ended', 'draw'
+  gameStatus    String    // 'waiting', 'active', 'completed', 'draw'
   winner        String?   // 'X', 'O', or null
-  players       Player[]  // Relation to players
   moves         Move[]    // Game history
+  playerX       User?     @relation("PlayerX", fields: [playerXId], references: [id])
+  playerXId     String?
+  playerO       User?     @relation("PlayerO", fields: [playerOId], references: [id])
+  playerOId     String?
+  playerXReady  Boolean   @default(false)
+  playerOReady  Boolean   @default(false)
+  players       Player[]  // Add opposite relation for Player model
 }
 
 model Player {
@@ -28,7 +34,7 @@ model Player {
   symbol        String    // 'X' or 'O'
   isReady       Boolean   @default(false)
   timeRemaining Int       @default(60)
-  gameId        String
+  gameId        Int       // Changed from String to Int
   game          Game      @relation(fields: [gameId], references: [id])
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -38,9 +44,11 @@ model Move {
   id            Int       @id @default(autoincrement())
   position      Int
   symbol        String    // 'X' or 'O'
-  gameId        String
+  gameId        Int       // Changed from String to Int
   game          Game      @relation(fields: [gameId], references: [id])
   playedAt      DateTime  @default(now())
+  playerId      String    // ID of the user who made the move
+  player        User      @relation(fields: [playerId], references: [id])
 }
 
 model User {
@@ -50,4 +58,7 @@ model User {
   password      String
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  gamesAsX      Game[]    @relation("PlayerX")
+  gamesAsO      Game[]    @relation("PlayerO")
+  moves         Move[]
 }

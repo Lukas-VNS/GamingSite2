@@ -37,8 +37,11 @@ export function resetGame(gameId: string, io: Server) {
       clearTimeout(games[gameId].disconnectTimers.O);
     }
     
+    // Keep the existing players but reset everything else
+    const existingPlayers = games[gameId].players;
+    
     games[gameId] = {
-      ...games[gameId],
+      players: existingPlayers,
       squares: Array(9).fill(null),
       nextPlayer: 'X',
       readyStatus: {
@@ -104,4 +107,19 @@ export function countPlayersInGame(gameId: string): number {
   if (game.players.O) count++;
   
   return count;
+}
+
+// Broadcast game state update to all players in a game
+export function broadcastGameState(gameId: string, io: Server) {
+  const game = games[gameId];
+  if (!game) return;
+  
+  io.to(gameId).emit('game_update', {
+    squares: game.squares,
+    nextPlayer: game.nextPlayer,
+    readyStatus: game.readyStatus,
+    timers: game.timers,
+    gameStatus: game.gameStatus,
+    winner: game.winner
+  });
 } 
