@@ -16,7 +16,9 @@ export function initializeGame(gameId: string) {
       timerInterval: null,
       gameStatus: 'waiting',
       winner: null,
-      disconnectTimers: { X: null, O: null }
+      disconnectTimers: { X: null, O: null },
+      playerX: null,
+      playerO: null
     };
   }
 }
@@ -37,8 +39,10 @@ export function resetGame(gameId: string, io: Server) {
       clearTimeout(games[gameId].disconnectTimers.O);
     }
     
-    // Keep the existing players but reset everything else
+    // Keep the existing players and player information
     const existingPlayers = games[gameId].players;
+    const existingPlayerX = games[gameId].playerX;
+    const existingPlayerO = games[gameId].playerO;
     
     games[gameId] = {
       players: existingPlayers,
@@ -58,7 +62,9 @@ export function resetGame(gameId: string, io: Server) {
       disconnectTimers: {
         X: null,
         O: null
-      }
+      },
+      playerX: existingPlayerX,
+      playerO: existingPlayerO
     };
     
     // Broadcast the reset game state
@@ -68,7 +74,9 @@ export function resetGame(gameId: string, io: Server) {
       readyStatus: games[gameId].readyStatus,
       timers: games[gameId].timers,
       gameStatus: games[gameId].gameStatus,
-      winner: games[gameId].winner
+      winner: games[gameId].winner,
+      playerX: games[gameId].playerX,
+      playerO: games[gameId].playerO
     });
   }
 }
@@ -120,6 +128,9 @@ export function broadcastGameState(gameId: string, io: Server) {
     readyStatus: game.readyStatus,
     timers: game.timers,
     gameStatus: game.gameStatus,
-    winner: game.winner
+    winner: game.winner,
+    playerX: game.playerX,
+    playerO: game.playerO,
+    players: game.players
   });
 } 

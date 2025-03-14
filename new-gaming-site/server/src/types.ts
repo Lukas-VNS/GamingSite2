@@ -20,6 +20,14 @@ export interface GameState {
     X: NodeJS.Timeout | null;
     O: NodeJS.Timeout | null;
   };
+  playerX: {
+    id: string;
+    username: string;
+  } | null;
+  playerO: {
+    id: string;
+    username: string;
+  } | null;
 }
 
 export type PlayerSymbol = 'X' | 'O';

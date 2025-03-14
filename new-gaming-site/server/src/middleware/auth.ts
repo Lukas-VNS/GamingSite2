@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 declare global {
   namespace Express {
@@ -13,7 +16,7 @@ declare global {
   }
 }
 
-export const authenticateToken: RequestHandler = (req: Request, res: Response, next: NextFunction): void => {
+export const authenticateToken: RequestHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -28,11 +31,22 @@ export const authenticateToken: RequestHandler = (req: Request, res: Response, n
       email: string;
     };
     
-    req.user = {
-      id: decoded.userId,
-      email: decoded.email,
-      username: '' // We'll need to fetch this from the database if needed
-    };
+    // Fetch complete user information from database
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        username: true,
+        email: true
+      }
+    });
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+    
+    req.user = user;
     next();
   } catch (err) {
     res.status(403).json({ message: 'Invalid token' });

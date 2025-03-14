@@ -36,6 +36,14 @@ interface PlayerAssignedData {
   };
   gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
   winner: 'X' | 'O' | null;
+  playerX: {
+    id: string;
+    username: string;
+  } | null;
+  playerO: {
+    id: string;
+    username: string;
+  } | null;
 }
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
@@ -81,12 +89,31 @@ const GameRoom: React.FC = () => {
       console.log('Player assigned:', data);
       setPlayerSymbol(data.player);
       setGame(prevGame => {
-        if (!prevGame) return prevGame;
+        if (!prevGame) {
+          // If no previous game state, create a new one
+          return {
+            id: parseInt(gameId || '0'),
+            squares: Array(9).fill(null),
+            nextPlayer: 'X',
+            gameStatus: data.gameStatus,
+            readyStatus: data.readyStatus,
+            winner: data.winner,
+            playerX: data.playerX,
+            playerO: data.playerO,
+            players: {
+              X: null,
+              O: null
+            }
+          };
+        }
+        // If there is a previous game state, update it
         return {
           ...prevGame,
           gameStatus: data.gameStatus,
           readyStatus: data.readyStatus,
-          winner: data.winner
+          winner: data.winner,
+          playerX: data.playerX,
+          playerO: data.playerO
         };
       });
     });
@@ -166,7 +193,7 @@ const GameRoom: React.FC = () => {
     navigate('/');
   };
 
-  const getStatusMessage = () => {
+  const getStatusMessage = (isEndGameMessage: boolean = false) => {
     if (!game) return '';
     
     if (game.gameStatus === 'waiting') {
@@ -181,16 +208,18 @@ const GameRoom: React.FC = () => {
       }
     }
     
-    if (game.gameStatus === 'ended') {
-      if (game.winner === playerSymbol) {
-        return 'You won! 🎉';
-      } else {
-        return 'You lost! 😔';
+    // Only return end game messages when explicitly requested (for the bottom section)
+    if (isEndGameMessage && (game.gameStatus === 'ended' || game.gameStatus === 'draw')) {
+      if (game.gameStatus === 'ended') {
+        if (game.winner === playerSymbol) {
+          return 'You won! 🎉';
+        } else {
+          return 'You lost! 😔';
+        }
       }
-    }
-    
-    if (game.gameStatus === 'draw') {
-      return "It's a draw! 🤝";
+      if (game.gameStatus === 'draw') {
+        return "It's a draw! 🤝";
+      }
     }
     
     return '';
@@ -225,6 +254,23 @@ const GameRoom: React.FC = () => {
         )}
 
         <div className="bg-gray-700 rounded-lg p-8 shadow-xl max-w-md mx-auto">
+          {/* Player Names */}
+          <div className="flex justify-between items-center mb-8">
+            <div className={`text-center flex-1 p-3 rounded-lg ${playerSymbol === 'X' ? 'bg-blue-500/10' : ''}`}>
+              <div className="text-sm text-gray-400">Player X</div>
+              <div className={`font-bold ${playerSymbol === 'X' ? 'text-blue-400' : 'text-gray-300'}`}>
+                {game.playerX?.username || 'Waiting...'}
+              </div>
+            </div>
+            <div className="mx-4 text-gray-500">vs</div>
+            <div className={`text-center flex-1 p-3 rounded-lg ${playerSymbol === 'O' ? 'bg-purple-500/10' : ''}`}>
+              <div className="text-sm text-gray-400">Player O</div>
+              <div className={`font-bold ${playerSymbol === 'O' ? 'text-purple-400' : 'text-gray-300'}`}>
+                {game.playerO?.username || 'Waiting...'}
+              </div>
+            </div>
+          </div>
+
           <div className="mb-6">
             <div className="flex justify-between text-gray-300 mb-4">
               <div className="text-lg font-semibold">
@@ -261,7 +307,7 @@ const GameRoom: React.FC = () => {
                 game.winner === playerSymbol ? 'text-green-400' : 
                 game.winner ? 'text-red-400' : 'text-yellow-400'
               }`}>
-                {getStatusMessage()}
+                {getStatusMessage(true)}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <button
