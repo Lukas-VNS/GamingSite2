@@ -17,8 +17,10 @@ export function initializeGame(gameId: string) {
       gameStatus: 'waiting',
       winner: null,
       disconnectTimers: { X: null, O: null },
-      playerX: null,
-      playerO: null
+      playerX: { id: '', username: '' },
+      playerO: { id: '', username: '' },
+      playerXId: '', // Will be set when game is created
+      playerOId: ''  // Will be set when game is created
     };
   }
 }
@@ -43,6 +45,8 @@ export function resetGame(gameId: string, io: Server) {
     const existingPlayers = games[gameId].players;
     const existingPlayerX = games[gameId].playerX;
     const existingPlayerO = games[gameId].playerO;
+    const existingPlayerXId = games[gameId].playerXId;
+    const existingPlayerOId = games[gameId].playerOId;
     
     games[gameId] = {
       players: existingPlayers,
@@ -64,7 +68,9 @@ export function resetGame(gameId: string, io: Server) {
         O: null
       },
       playerX: existingPlayerX,
-      playerO: existingPlayerO
+      playerO: existingPlayerO,
+      playerXId: existingPlayerXId,
+      playerOId: existingPlayerOId
     };
     
     // Broadcast the reset game state
@@ -76,7 +82,9 @@ export function resetGame(gameId: string, io: Server) {
       gameStatus: games[gameId].gameStatus,
       winner: games[gameId].winner,
       playerX: games[gameId].playerX,
-      playerO: games[gameId].playerO
+      playerO: games[gameId].playerO,
+      playerXId: games[gameId].playerXId,
+      playerOId: games[gameId].playerOId
     });
   }
 }

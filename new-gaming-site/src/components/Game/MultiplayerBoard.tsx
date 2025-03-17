@@ -125,8 +125,6 @@ const MultiplayerBoard: React.FC = () => {
       } else {
         if (reason === 'timeout') {
           setStatus('You lost - time ran out!');
-        } else if (reason === 'disconnect') {
-          setStatus('Opponent disconnected - You win!');
         } else {
           setStatus('You lost!');
         }
@@ -237,8 +235,7 @@ const MultiplayerBoard: React.FC = () => {
       {/* Disconnect warning */}
       {playersConnected < 2 && (gameStatus === 'active' || gameStatus === 'waiting') && (
         <div className="mt-4 text-amber-600 font-medium">
-          {player === 'X' ? 'Player O' : 'Player X'} disconnected. 
-          {gameStatus === 'active' && ' They have 30 seconds to reconnect or they will forfeit.'}
+          {player === 'X' ? 'Player O' : 'Player X'} disconnected. Waiting for them to reconnect...
         </div>
       )}
     </div>

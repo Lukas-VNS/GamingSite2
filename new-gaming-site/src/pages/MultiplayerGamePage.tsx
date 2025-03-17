@@ -29,14 +29,14 @@ const MultiplayerGamePage: React.FC = () => {
     });
 
     newSocket.on('connect', () => {
-      console.log('Connected to server');
+      console.log('Connected to server with socket ID:', newSocket.id);
       setError(''); // Clear any previous connection errors
       
       // Auto-join queue if coming from a finished game
       if (location.state?.autoJoinQueue) {
         setIsInQueue(true);
+        console.log('Auto-joining queue with socket ID:', newSocket.id);
         newSocket.emit('join_queue');
-        console.log('Auto-joining queue...');
       }
     });
 
@@ -47,26 +47,26 @@ const MultiplayerGamePage: React.FC = () => {
     });
 
     newSocket.on('disconnect', () => {
-      console.log('Disconnected from server');
+      console.log('Disconnected from server, socket ID:', newSocket.id);
       setError('Connection lost. Please try again.');
       setIsInQueue(false);
     });
 
     // Listen for queue events
     newSocket.on('queue_joined', () => {
-      console.log('Successfully joined queue');
+      console.log('Successfully joined queue with socket ID:', newSocket.id);
       setError('');
     });
 
     newSocket.on('queue_error', (message: string) => {
-      console.error('Queue error:', message);
+      console.error('Queue error:', message, 'Socket ID:', newSocket.id);
       setError(message);
       setIsInQueue(false);
     });
 
     // Listen for game created event
     newSocket.on('game_created', (gameId: string) => {
-      console.log('Game created, navigating to game room:', gameId);
+      console.log('Game created, navigating to game room:', gameId, 'Socket ID:', newSocket.id);
       setIsInQueue(false);
       navigate(`/tictactoe/multiplayer/game/${gameId}`);
     });
@@ -75,7 +75,9 @@ const MultiplayerGamePage: React.FC = () => {
 
     return () => {
       if (newSocket) {
+        console.log('Cleaning up socket connection:', newSocket.id);
         if (isInQueue) {
+          console.log('Leaving queue before cleanup');
           newSocket.emit('leave_queue');
         }
         newSocket.disconnect();
@@ -85,14 +87,15 @@ const MultiplayerGamePage: React.FC = () => {
 
   const handleJoinQueue = () => {
     if (!socket) {
+      console.error('Cannot join queue: socket not connected');
       setError('Not connected to server');
       return;
     }
 
+    console.log('Joining queue with socket ID:', socket.id);
     setError(''); // Clear any previous errors
     setIsInQueue(true);
     socket.emit('join_queue');
-    console.log('Joining queue...');
   };
 
   const handleCancelQueue = () => {

@@ -103,43 +103,6 @@ export const joinQueue = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Look for a waiting game to join
-    const waitingGame = await prisma.game.findFirst({
-      where: {
-        gameStatus: 'waiting',
-        playerOId: null,
-        NOT: {
-          playerXId: userId
-        }
-      }
-    });
-
-    if (waitingGame) {
-      // Join existing game as player O
-      const updatedGame = await prisma.game.update({
-        where: { id: waitingGame.id },
-        data: {
-          playerOId: userId,
-          players: {
-            create: {
-              socketId,
-              symbol: 'O',
-              isReady: false,
-              timeRemaining: 60
-            }
-          }
-        },
-        include: {
-          playerX: true,
-          playerO: true,
-          players: true
-        }
-      });
-
-      res.json({ game: updatedGame });
-      return;
-    }
-
     // Create new game as player X
     const newGame = await prisma.game.create({
       data: {
@@ -147,6 +110,7 @@ export const joinQueue = async (req: Request, res: Response): Promise<void> => {
         nextPlayer: 'X',
         gameStatus: 'waiting',
         playerXId: userId,
+        playerOId: userId, // Temporarily set to same user until socket matchmaking assigns player O
         players: {
           create: {
             socketId,
@@ -158,6 +122,7 @@ export const joinQueue = async (req: Request, res: Response): Promise<void> => {
       },
       include: {
         playerX: true,
+        playerO: true,
         players: true
       }
     });
@@ -347,14 +312,25 @@ export const getGameById = async (req: Request, res: Response): Promise<void> =>
     // First check if the game exists in memory
     const memoryGame = games[gameId.toString()];
     if (memoryGame) {
+      // Check if the user is a player in this game
+      const isPlayerX = memoryGame.playerX?.id === userId;
+      const isPlayerO = memoryGame.playerO?.id === userId;
+
+      if (!isPlayerX && !isPlayerO) {
+        res.status(403).json({ message: 'Not a player in this game' });
+        return;
+      }
+
       res.json({ 
         id: gameId,
         squares: memoryGame.squares,
         nextPlayer: memoryGame.nextPlayer,
         gameStatus: memoryGame.gameStatus,
         winner: memoryGame.winner,
-        playerX: null,
-        playerO: null
+        playerX: memoryGame.playerX,
+        playerO: memoryGame.playerO,
+        playerXId: memoryGame.playerX?.id,
+        playerOId: memoryGame.playerO?.id
       });
       return;
     }
@@ -392,15 +368,19 @@ export const getGameById = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Check if the user is a player in this game
-    const isPlayerX = game.playerXId === userId;
-    const isPlayerO = game.playerOId === userId;
+    const isPlayerX = game.playerX?.id === userId;
+    const isPlayerO = game.playerO?.id === userId;
 
     if (!isPlayerX && !isPlayerO) {
       res.status(403).json({ message: 'Not a player in this game' });
       return;
     }
 
-    res.json({ game });
+    res.json({ 
+      game,
+      playerXId: game.playerX?.id,
+      playerOId: game.playerO?.id
+    });
   } catch (error) {
     console.error('Error getting game:', error);
     res.status(500).json({ message: 'Server error' });

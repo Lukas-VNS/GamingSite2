@@ -23,11 +23,13 @@ export interface GameState {
   playerX: {
     id: string;
     username: string;
-  } | null;
+  };
   playerO: {
     id: string;
     username: string;
-  } | null;
+  };
+  playerXId: string;
+  playerOId: string;
 }
 
 export type PlayerSymbol = 'X' | 'O';

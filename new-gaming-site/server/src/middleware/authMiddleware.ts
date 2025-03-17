@@ -1,5 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required');
@@ -9,12 +12,13 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 interface AuthRequest extends Request {
   user?: {
-    userId: string;
+    id: string;
+    username: string;
     email: string;
   };
 }
 
-export const authenticateToken = (
+export const authenticateToken = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -31,7 +35,22 @@ export const authenticateToken = (
       userId: string;
       email: string;
     };
-    req.user = decoded;
+
+    // Fetch complete user information from database
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        username: true,
+        email: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    req.user = user;
     next();
   } catch (error) {
     return res.status(403).json({ message: 'Invalid token' });

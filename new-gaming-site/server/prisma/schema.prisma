@@ -16,16 +16,20 @@ model Game {
   updatedAt     DateTime  @updatedAt
   squares       Json      // Stores the game board state
   nextPlayer    String    // 'X' or 'O'
-  gameStatus    String    // 'waiting', 'active', 'completed', 'draw'
+  gameStatus    String    // 'waiting', 'active', 'ended', 'draw'
   winner        String?   // 'X', 'O', or null
   moves         Move[]    // Game history
-  playerX       User?     @relation("PlayerX", fields: [playerXId], references: [id])
-  playerXId     String?
-  playerO       User?     @relation("PlayerO", fields: [playerOId], references: [id])
-  playerOId     String?
+  playerX       User      @relation("PlayerX", fields: [playerXId], references: [id])
+  playerXId     String
+  playerO       User      @relation("PlayerO", fields: [playerOId], references: [id])
+  playerOId     String
   playerXReady  Boolean   @default(false)
   playerOReady  Boolean   @default(false)
   players       Player[]  // Add opposite relation for Player model
+  // Timer fields
+  playerXTimeRemaining Int @default(60)  // Time in seconds
+  playerOTimeRemaining Int @default(60)  // Time in seconds
+  lastMoveTimestamp   DateTime @default(now())
 }
 
 model Player {

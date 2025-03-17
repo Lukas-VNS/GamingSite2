@@ -1,9 +1,32 @@
 import { Server } from 'socket.io';
 import { games } from './gameState';
-import { PlayerSymbol } from '../types';
+
+export type PlayerSymbol = 'X' | 'O';
+export type GameStatus = 'waiting' | 'active' | 'ended' | 'draw';
+
+export interface GameState {
+  id: number;
+  squares: Array<PlayerSymbol | null>;
+  nextPlayer: PlayerSymbol;
+  gameStatus: GameStatus;
+  winner: PlayerSymbol | null;
+  playerX: {
+    id: string;
+    username: string;
+  };
+  playerO: {
+    id: string;
+    username: string;
+  };
+  playerXId: string;
+  playerOId: string;
+  playerXTimeRemaining: number;
+  playerOTimeRemaining: number;
+  lastMoveTimestamp: string;
+}
 
 // Helper function to check if there's a winner
-export function checkWinner(squares: Array<'X' | 'O' | null>): 'X' | 'O' | null {
+export function checkWinner(squares: Array<PlayerSymbol | null>): PlayerSymbol | null {
   const lines = [
     [0, 1, 2],
     [3, 4, 5],
@@ -12,17 +35,34 @@ export function checkWinner(squares: Array<'X' | 'O' | null>): 'X' | 'O' | null 
     [1, 4, 7],
     [2, 5, 8],
     [0, 4, 8],
-    [2, 4, 6],
+    [2, 4, 6]
   ];
-  
-  for (let i = 0; i < lines.length; i++) {
-    const [a, b, c] = lines[i];
+
+  for (const [a, b, c] of lines) {
     if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
       return squares[a];
     }
   }
-  
+
   return null;
+}
+
+export function isDraw(squares: Array<PlayerSymbol | null>): boolean {
+  return squares.every(square => square !== null);
+}
+
+export function isValidMove(squares: Array<PlayerSymbol | null>, position: number): boolean {
+  return position >= 0 && position < 9 && squares[position] === null;
+}
+
+export function getNextPlayer(currentPlayer: PlayerSymbol): PlayerSymbol {
+  return currentPlayer === 'X' ? 'O' : 'X';
+}
+
+export function isPlayerTurn(gameState: GameState, userId: string): boolean {
+  const isPlayerX = gameState.playerXId === userId;
+  const playerSymbol = isPlayerX ? 'X' : 'O';
+  return gameState.nextPlayer === playerSymbol;
 }
 
 // Check if game should start and start it if conditions are met
@@ -34,6 +74,8 @@ export function checkGameStart(gameId: string, io: Server) {
   console.log(`- X Ready: ${game.readyStatus.X}`);
   console.log(`- O Ready: ${game.readyStatus.O}`);
   console.log(`- Game status: ${game.gameStatus}`);
+  console.log(`- Player X ID: ${game.playerXId}`);
+  console.log(`- Player O ID: ${game.playerOId}`);
   
   // Only check ready status, not current connections
   if (game.readyStatus.X && game.readyStatus.O && game.gameStatus === 'waiting') {
@@ -50,7 +92,11 @@ export function checkGameStart(gameId: string, io: Server) {
       readyStatus: game.readyStatus,
       timers: game.timers,
       gameStatus: game.gameStatus,
-      winner: game.winner
+      winner: game.winner,
+      playerX: game.playerX,
+      playerO: game.playerO,
+      playerXId: game.playerXId,
+      playerOId: game.playerOId
     });
     
     // Start timer
