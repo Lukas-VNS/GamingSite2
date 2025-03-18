@@ -6,7 +6,6 @@ const SignupPage: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: '',
-    email: '',
     password: '',
     confirmPassword: ''
   });
@@ -36,7 +35,6 @@ const SignupPage: React.FC = () => {
         },
         body: JSON.stringify({
           username: formData.username,
-          email: formData.email,
           password: formData.password
         }),
       });
@@ -81,22 +79,6 @@ const SignupPage: React.FC = () => {
               required
               className="w-full px-3 py-2 bg-gray-600 rounded-md border border-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white placeholder-gray-400"
               placeholder="Choose a username"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 bg-gray-600 rounded-md border border-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white placeholder-gray-400"
-              placeholder="Enter your email"
             />
           </div>
 

@@ -5,7 +5,7 @@ import API_ENDPOINTS from '../config/api';
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: ''
   });
   const [error, setError] = useState('');
@@ -22,7 +22,7 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      console.log('Attempting login with:', { email: formData.email });
+      console.log('Attempting login with:', { username: formData.username });
       
       const response = await fetch(API_ENDPOINTS.login, {
         method: 'POST',
@@ -68,18 +68,18 @@ const LoginPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-              Email
+            <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-1">
+              Username
             </label>
             <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
               onChange={handleChange}
               required
               className="w-full px-3 py-2 bg-gray-600 rounded-md border border-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white placeholder-gray-400"
-              placeholder="Enter your email"
+              placeholder="Enter your username"
             />
           </div>
 

@@ -18,7 +18,7 @@ interface SignupRequest {
 }
 
 interface LoginRequest {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -27,23 +27,33 @@ export const signup = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { username, email, password } = req.body;
-    console.log('Signup attempt for:', { email, username });
+    const { username, password } = req.body;
+    console.log('Signup attempt for:', { username });
 
-    // Check if user already exists
+    // Check if username already exists
     const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { email },
-          { username }
-        ]
-      }
+      where: { username }
     });
 
     if (existingUser) {
-      console.log('User already exists:', { email, username });
-      res.status(400).json({ message: 'User already exists' });
+      console.log('Username already exists:', { username });
+      res.status(400).json({ message: 'Username already exists' });
       return;
+    }
+
+    // Generate a unique email using username and timestamp
+    const timestamp = Math.floor(Date.now() / 1000); // UTC timestamp in seconds
+    let uniqueEmail = `${username}${timestamp}@dev.com`;
+    
+    // Check if email exists and generate a new one if needed
+    let emailExists = await prisma.user.findUnique({
+      where: { email: uniqueEmail }
+    });
+
+    // If email exists, append a random number to make it unique
+    if (emailExists) {
+      const randomNum = Math.floor(Math.random() * 1000);
+      uniqueEmail = `${username}${timestamp}${randomNum}@dev.com`;
     }
 
     // Hash password
@@ -54,7 +64,7 @@ export const signup = async (
     const user = await prisma.user.create({
       data: {
         username,
-        email,
+        email: uniqueEmail,
         password: hashedPassword
       }
     });
@@ -87,15 +97,21 @@ export const login = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { email, password } = req.body;
-    console.log('Login attempt for:', { email });
+    const { username, password } = req.body;
+    console.log('Login attempt for:', { username });
 
-    // Find user
+    if (!username || !password) {
+      console.log('Missing credentials:', { username: !!username, password: !!password });
+      res.status(400).json({ message: 'Username and password are required' });
+      return;
+    }
+
+    // Find user by username
     const user = await prisma.user.findUnique({
-      where: { email }
+      where: { username }
     });
 
-    console.log('User found:', user ? { id: user.id, email: user.email } : 'No user found');
+    console.log('User found:', user ? { id: user.id, username: user.username } : 'No user found');
 
     if (!user) {
       res.status(401).json({ message: 'Invalid credentials' });
@@ -119,7 +135,7 @@ export const login = async (
       { expiresIn: '24h' }
     );
 
-    console.log('Login successful for user:', { id: user.id, email: user.email });
+    console.log('Login successful for user:', { id: user.id, username: user.username });
 
     res.json({
       message: 'Login successful',
@@ -163,5 +179,15 @@ export const getUser = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ message: 'Error fetching user data' });
+  }
+};
+
+export const getUserCount = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const count = await prisma.user.count();
+    res.json({ count });
+  } catch (error) {
+    console.error('Get user count error:', error);
+    res.status(500).json({ message: 'Error fetching user count' });
   }
 }; 

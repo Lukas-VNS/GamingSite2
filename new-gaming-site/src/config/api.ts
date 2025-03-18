@@ -5,6 +5,7 @@ const API_ENDPOINTS = {
   signup: `${API_BASE_URL}/api/auth/signup`,
   login: `${API_BASE_URL}/api/auth/login`,
   user: `${API_BASE_URL}/api/auth/user`,
+  userCount: `${API_BASE_URL}/api/auth/count`,
   games: {
     current: `${API_BASE_URL}/api/games/current`,
     join: `${API_BASE_URL}/api/games/join`,
