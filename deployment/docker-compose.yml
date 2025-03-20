@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      - db
+    restart: always
+    environment:
+      - DATABASE_URL=mysql://gaming_user:gaming123@db:3306/gaming_db
+      - JWT_SECRET=gaming_site_jwt_secret_key_2024
+    networks:
+      - app-network
+
+  db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root123gaming
+      - MYSQL_DATABASE=gaming_db
+      - MYSQL_USER=gaming_user
+      - MYSQL_PASSWORD=gaming123
+    networks:
+      - app-network
+
+volumes:
+  mysql_data:
+
+networks:
+  app-network:
+    driver: bridge 

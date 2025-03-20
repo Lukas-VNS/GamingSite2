@@ -1,11 +1,41 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation template for Full-Stack Web Application deployment'
+Description: 'CloudFormation template for Docker-based Web Application with ECR'
 
 Resources:
+  # ECR Repository
+  AppRegistry:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: gaming-site
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  # IAM Role for EC2
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
+  # EC2 Instance Profile
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  # Security Group
   WebAppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable HTTP, HTTPS, and EC2 Instance Connect access
+      GroupDescription: Enable HTTP and HTTPS access
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -15,72 +45,26 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-        # EC2 Instance Connect (us-east-1)
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 18.206.107.24/29
 
+  # EC2 Instance
   WebAppInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
       SecurityGroups:
         - !Ref WebAppSecurityGroup
-      ImageId: ami-0c7217cdde317cfec  # Ubuntu 22.04 LTS in us-east-1 (update for your region)
+      ImageId: ami-0c7217cdde317cfec  # Ubuntu 22.04 LTS in us-east-1
+      IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          
-          # Update system
           apt-get update
-          apt-get upgrade -y
+          apt-get install -y docker.io awscli docker-compose
+          systemctl start docker
+          systemctl enable docker
           
-          # Install basic tools
-          apt-get install -y git curl wget unzip
-
-          # Install Node.js 18.x
-          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-          apt-get install -y nodejs
-
-          # Install MySQL
-          apt-get install -y mysql-server
-
-          # Install Nginx
-          apt-get install -y nginx
-
-          # Install PM2 globally
-          npm install -g pm2
-
-          # Install Certbot
-          apt-get install -y certbot python3-certbot-nginx
-
-          # Create application directory and set permissions
-          mkdir -p /var/www/app/{frontend,backend}
-          
-          # Set ubuntu user as owner
-          chown -R ubuntu:ubuntu /var/www/app
-
-          # Create deployment directory
-          mkdir -p /home/ubuntu/deployment
-          chown -R ubuntu:ubuntu /home/ubuntu/deployment
-
-          # Configure MySQL to start on boot
-          systemctl enable mysql
-          
-          # Configure Nginx to start on boot
-          systemctl enable nginx
-
-          # Setup PM2 to start on boot
-          pm2 startup systemd -u ubuntu --hp /home/ubuntu
-          systemctl enable pm2-ubuntu
-
-          # Create a welcome message
-          echo "Web application environment is ready. Please use EC2 Instance Connect to access the server and deploy your application." > /home/ubuntu/welcome.txt
-
-          # Schedule a reboot in 1 minute to ensure all services are properly started
-          # This gives time for the UserData script to complete
-          (sleep 60 && reboot) &
+          # Configure AWS CLI for ECR
+          aws ecr get-login-password --region ${AWS::Region} | docker login --username AWS --password-stdin ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com
 
 Outputs:
   InstanceId:
@@ -93,4 +77,8 @@ Outputs:
 
   PublicIP:
     Description: Public IP address of the created EC2 instance
-    Value: !GetAtt WebAppInstance.PublicIp 
+    Value: !GetAtt WebAppInstance.PublicIp
+
+  RepositoryURI:
+    Description: URI of the ECR repository
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${AppRegistry} 
