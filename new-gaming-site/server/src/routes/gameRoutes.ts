@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getCurrentGame, joinQueue, makeMove, setPlayerReady, getGameById } from '../controllers/gameController';
+import { getCurrentGame, joinQueue, makeMove, setPlayerReady, getGameById, getConnect4GameById } from '../controllers/gameController';
 import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
@@ -9,6 +9,9 @@ router.use(authenticateToken);
 
 // Get current game for the authenticated user
 router.get('/current', getCurrentGame);
+
+// Get Connect 4 game by ID
+router.get('/connect4-games/:gameId', getConnect4GameById);
 
 // Get game by ID
 router.get('/:gameId', getGameById);

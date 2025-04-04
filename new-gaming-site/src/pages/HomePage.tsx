@@ -67,6 +67,41 @@ const HomePage: React.FC = () => {
             </div>
           </div>
 
+          {/* Connect 4 Card */}
+          <div className="bg-gray-700 rounded-lg overflow-hidden shadow-lg transform hover:scale-105 transition-transform">
+            <div className="p-6">
+              <h3 className="text-2xl font-bold mb-4">Connect 4</h3>
+              <div className="grid grid-cols-7 gap-1 mb-4">
+                {[...Array(42)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="aspect-square bg-gray-600 rounded-full flex items-center justify-center text-2xl font-bold"
+                  >
+                    {i % 2 === 0 ? 'X' : ''}
+                  </div>
+                ))}
+              </div>
+              <p className="text-gray-300 mb-4">
+                Drop your pieces and connect four in a row to win! Challenge friends in this strategic game.
+              </p>
+              {isAuthenticated ? (
+                <button
+                  onClick={() => navigate('/connect4')}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md transition-colors"
+                >
+                  Play Now
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate('/login')}
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-md transition-colors"
+                >
+                  Sign In to Play
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Coming Soon Card */}
           <div className="bg-gray-700 rounded-lg overflow-hidden shadow-lg">
             <div className="p-6">

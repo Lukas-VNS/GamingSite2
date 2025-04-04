@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API_ENDPOINTS from '../config/api';
+import { endpoints } from '../config/api';
 
 const SignupPage: React.FC = () => {
   const navigate = useNavigate();
@@ -28,15 +28,12 @@ const SignupPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(API_ENDPOINTS.signup, {
+      const response = await fetch(endpoints.signup, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username: formData.username,
-          password: formData.password
-        }),
+        body: JSON.stringify(formData),
       });
 
       const data = await response.json();

@@ -2,54 +2,133 @@ import { Server } from 'socket.io';
 import { GameState, PlayerSymbol } from '../types';
 import { INITIAL_TIME } from '../config';
 
-export const games: Record<string, GameState> = {};
+export interface TicTacToeGameState extends GameState {
+  squares: Array<'X' | 'O' | null>;
+  players: {
+    X: string | null;
+    O: string | null;
+  };
+  readyStatus: {
+    X: boolean;
+    O: boolean;
+  };
+  timers: {
+    X: number;
+    O: number;
+  };
+  timerInterval: NodeJS.Timeout | null;
+  disconnectTimers: {
+    X: NodeJS.Timeout | null;
+    O: NodeJS.Timeout | null;
+  };
+  playerX: {
+    id: string;
+    username: string;
+  };
+  playerO: {
+    id: string;
+    username: string;
+  };
+  playerXId: string;
+  playerOId: string;
+  playerXTimeRemaining: number;
+  playerOTimeRemaining: number;
+}
+
+export interface Connect4GameState extends GameState {
+  board: Array<Array<'red' | 'yellow' | null>>;
+  playerRed: {
+    id: string;
+    username: string;
+  };
+  playerYellow: {
+    id: string;
+    username: string;
+  };
+  playerRedId: string;
+  playerYellowId: string;
+  playerRedTimeRemaining: number;
+  playerYellowTimeRemaining: number;
+}
+
+export const games: Record<string, TicTacToeGameState | Connect4GameState> = {};
+
+export function isTicTacToeGame(game: TicTacToeGameState | Connect4GameState): game is TicTacToeGameState {
+  return 'squares' in game;
+}
+
+export function isConnect4Game(game: TicTacToeGameState | Connect4GameState): game is Connect4GameState {
+  return 'board' in game;
+}
 
 // Initialize a game if it doesn't exist
-export function initializeGame(gameId: string) {
+export function initializeGame(gameId: string): TicTacToeGameState | Connect4GameState {
   if (!games[gameId]) {
-    games[gameId] = {
-      players: { X: null, O: null },
-      readyStatus: { X: false, O: false },
+    const newGame: TicTacToeGameState = {
+      id: parseInt(gameId),
       squares: Array(9).fill(null),
       nextPlayer: 'X',
-      timers: { X: INITIAL_TIME, O: INITIAL_TIME },
-      timerInterval: null,
       gameStatus: 'waiting',
       winner: null,
-      disconnectTimers: { X: null, O: null },
+      players: {
+        X: null,
+        O: null
+      },
+      readyStatus: {
+        X: false,
+        O: false
+      },
+      timers: {
+        X: INITIAL_TIME,
+        O: INITIAL_TIME
+      },
+      timerInterval: null,
+      disconnectTimers: {
+        X: null,
+        O: null
+      },
       playerX: { id: '', username: '' },
       playerO: { id: '', username: '' },
-      playerXId: '', // Will be set when game is created
-      playerOId: ''  // Will be set when game is created
+      playerXId: '',
+      playerOId: '',
+      playerXTimeRemaining: INITIAL_TIME,
+      playerOTimeRemaining: INITIAL_TIME,
+      lastMoveTimestamp: new Date().toISOString()
     };
+    games[gameId] = newGame;
   }
+  return games[gameId];
 }
 
 // Reset a game for a new round
 export function resetGame(gameId: string, io: Server) {
-  if (games[gameId]) {
-    // Stop existing timer
-    if (games[gameId].timerInterval) {
-      clearInterval(games[gameId].timerInterval);
-    }
-    
-    // Clear any disconnect timers
-    if (games[gameId].disconnectTimers.X) {
-      clearTimeout(games[gameId].disconnectTimers.X);
-    }
-    if (games[gameId].disconnectTimers.O) {
-      clearTimeout(games[gameId].disconnectTimers.O);
-    }
-    
+  const game = games[gameId];
+  if (!game) return;
+
+  // Stop existing timer
+  if (game.timerInterval) {
+    clearInterval(game.timerInterval);
+  }
+  
+  // Clear any disconnect timers
+  if (game.disconnectTimers?.X) {
+    clearTimeout(game.disconnectTimers.X);
+  }
+  if (game.disconnectTimers?.O) {
+    clearTimeout(game.disconnectTimers.O);
+  }
+
+  if (isTicTacToeGame(game)) {
     // Keep the existing players and player information
-    const existingPlayers = games[gameId].players;
-    const existingPlayerX = games[gameId].playerX;
-    const existingPlayerO = games[gameId].playerO;
-    const existingPlayerXId = games[gameId].playerXId;
-    const existingPlayerOId = games[gameId].playerOId;
+    const existingPlayers = game.players;
+    const existingPlayerX = game.playerX;
+    const existingPlayerO = game.playerO;
+    const existingPlayerXId = game.playerXId;
+    const existingPlayerOId = game.playerOId;
     
+    // Reset the game state
     games[gameId] = {
-      players: existingPlayers,
+      ...game,
       squares: Array(9).fill(null),
       nextPlayer: 'X',
       readyStatus: {
@@ -70,7 +149,10 @@ export function resetGame(gameId: string, io: Server) {
       playerX: existingPlayerX,
       playerO: existingPlayerO,
       playerXId: existingPlayerXId,
-      playerOId: existingPlayerOId
+      playerOId: existingPlayerOId,
+      playerXTimeRemaining: INITIAL_TIME,
+      playerOTimeRemaining: INITIAL_TIME,
+      lastMoveTimestamp: new Date().toISOString()
     };
     
     // Broadcast the reset game state
@@ -86,6 +168,42 @@ export function resetGame(gameId: string, io: Server) {
       playerXId: games[gameId].playerXId,
       playerOId: games[gameId].playerOId
     });
+  } else if (isConnect4Game(game)) {
+    // Keep the existing player information
+    const existingPlayerRed = game.playerRed;
+    const existingPlayerYellow = game.playerYellow;
+    const existingPlayerRedId = game.playerRedId;
+    const existingPlayerYellowId = game.playerYellowId;
+    
+    // Reset the game state
+    games[gameId] = {
+      ...game,
+      board: Array(6).fill(null).map(() => Array(7).fill(null)),
+      nextPlayer: 'red',
+      gameStatus: 'waiting',
+      winner: null,
+      playerRed: existingPlayerRed,
+      playerYellow: existingPlayerYellow,
+      playerRedId: existingPlayerRedId,
+      playerYellowId: existingPlayerYellowId,
+      playerRedTimeRemaining: INITIAL_TIME,
+      playerYellowTimeRemaining: INITIAL_TIME,
+      lastMoveTimestamp: new Date().toISOString()
+    };
+    
+    // Broadcast the reset game state
+    io.to(gameId).emit('game_update', {
+      board: games[gameId].board,
+      nextPlayer: games[gameId].nextPlayer,
+      gameStatus: games[gameId].gameStatus,
+      winner: games[gameId].winner,
+      playerRed: games[gameId].playerRed,
+      playerYellow: games[gameId].playerYellow,
+      playerRedId: games[gameId].playerRedId,
+      playerYellowId: games[gameId].playerYellowId,
+      playerRedTimeRemaining: games[gameId].playerRedTimeRemaining,
+      playerYellowTimeRemaining: games[gameId].playerYellowTimeRemaining
+    });
   }
 }
 
@@ -94,19 +212,36 @@ export function assignPlayerToGame(gameId: string, socketId: string): PlayerSymb
   const game = games[gameId];
   if (!game) return null;
   
-  // Check if this socket ID already had a position (reconnecting)
-  if (game.players.X === socketId) return 'X';
-  if (game.players.O === socketId) return 'O';
-  
-  // If X is not assigned, assign X
-  if (game.players.X === null) {
-    game.players.X = socketId;
-    return 'X';
-  }
-  // If O is not assigned, assign O
-  else if (game.players.O === null) {
-    game.players.O = socketId;
-    return 'O';
+  if (isTicTacToeGame(game)) {
+    // Check if this socket ID already had a position (reconnecting)
+    if (game.players.X === socketId) return 'X';
+    if (game.players.O === socketId) return 'O';
+    
+    // If X is not assigned, assign X
+    if (game.players.X === null) {
+      game.players.X = socketId;
+      return 'X';
+    }
+    // If O is not assigned, assign O
+    else if (game.players.O === null) {
+      game.players.O = socketId;
+      return 'O';
+    }
+  } else if (isConnect4Game(game)) {
+    // Check if this socket ID already had a position (reconnecting)
+    if (game.playerRedId === socketId) return 'red';
+    if (game.playerYellowId === socketId) return 'yellow';
+    
+    // If red is not assigned, assign red
+    if (!game.playerRedId) {
+      game.playerRedId = socketId;
+      return 'red';
+    }
+    // If yellow is not assigned, assign yellow
+    else if (!game.playerYellowId) {
+      game.playerYellowId = socketId;
+      return 'yellow';
+    }
   }
   
   // Both positions filled
@@ -119,8 +254,13 @@ export function countPlayersInGame(gameId: string): number {
   if (!game) return 0;
   
   let count = 0;
-  if (game.players.X) count++;
-  if (game.players.O) count++;
+  if (isTicTacToeGame(game)) {
+    if (game.players?.X) count++;
+    if (game.players?.O) count++;
+  } else if (isConnect4Game(game)) {
+    if (game.playerRedId) count++;
+    if (game.playerYellowId) count++;
+  }
   
   return count;
 }
@@ -141,4 +281,50 @@ export function broadcastGameState(gameId: string, io: Server) {
     playerO: game.playerO,
     players: game.players
   });
+}
+
+// Update player time remaining
+export async function updatePlayerTimeRemaining(gameId: string, player: 'X' | 'O'): Promise<number> {
+  const game = games[gameId];
+  if (!game || !isTicTacToeGame(game)) return 0;
+
+  const timeField = player === 'X' ? 'playerXTimeRemaining' : 'playerOTimeRemaining';
+  const currentTime = game[timeField];
+  
+  if (currentTime > 0) {
+    game[timeField] = currentTime - 1;
+  }
+  
+  return game[timeField];
+}
+
+export async function updateConnect4PlayerTimeRemaining(gameId: string, player: 'red' | 'yellow'): Promise<number> {
+  const game = games[gameId];
+  if (!game || !isConnect4Game(game)) return 0;
+
+  const timeField = player === 'red' ? 'playerRedTimeRemaining' : 'playerYellowTimeRemaining';
+  const currentTime = game[timeField];
+  
+  if (currentTime > 0) {
+    game[timeField] = currentTime - 1;
+  }
+  
+  return game[timeField];
+}
+
+export function getConnectedPlayers(gameId: string): number {
+  const game = games[gameId];
+  if (!game) return 0;
+  
+  let count = 0;
+  
+  if (isTicTacToeGame(game)) {
+    if (game.players?.X) count++;
+    if (game.players?.O) count++;
+  } else if (isConnect4Game(game)) {
+    if (game.playerRedId) count++;
+    if (game.playerYellowId) count++;
+  }
+  
+  return count;
 } 

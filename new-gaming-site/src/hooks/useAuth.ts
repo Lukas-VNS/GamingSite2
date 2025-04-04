@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import API_ENDPOINTS from '../config/api';
+import { endpoints } from '../config/api';
 
 interface User {
   id: string;
@@ -27,7 +27,7 @@ export const useAuth = () => {
       }
 
       try {
-        const response = await fetch(`${API_ENDPOINTS.user}`, {
+        const response = await fetch(endpoints.user, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

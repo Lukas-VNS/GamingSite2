@@ -52,4 +52,13 @@ export const authenticateToken: RequestHandler = async (req: Request, res: Respo
     res.status(403).json({ message: 'Invalid token' });
     return;
   }
-}; 
+};
+
+export async function verifyToken(token: string): Promise<{ userId: string } | null> {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    return decoded;
+  } catch (error) {
+    return null;
+  }
+} 

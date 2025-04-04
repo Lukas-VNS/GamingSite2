@@ -8,6 +8,10 @@ import GameRoom from './pages/GameRoom';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import TicTacToePage from './pages/TicTacToePage';
+import Connect4Page from './pages/Connect4Page';
+import Connect4LocalPage from './pages/Connect4LocalPage';
+import Connect4MultiplayerPage from './pages/Connect4MultiplayerPage';
+import Connect4GameRoom from './pages/Connect4GameRoom';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import Layout from './components/Layout';
 
@@ -40,6 +44,26 @@ function App() {
           <Route path="/tictactoe/multiplayer/game/:gameId" element={
             <ProtectedRoute>
               <GameRoom />
+            </ProtectedRoute>
+          } />
+          <Route path="/connect4" element={
+            <ProtectedRoute>
+              <Connect4Page />
+            </ProtectedRoute>
+          } />
+          <Route path="/connect4/local" element={
+            <ProtectedRoute>
+              <Connect4LocalPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/connect4/multiplayer" element={
+            <ProtectedRoute>
+              <Connect4MultiplayerPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/connect4/multiplayer/game/:gameId" element={
+            <ProtectedRoute>
+              <Connect4GameRoom />
             </ProtectedRoute>
           } />
         </Routes>

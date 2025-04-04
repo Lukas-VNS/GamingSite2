@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 const MultiplayerGamePage: React.FC = () => {
   const navigate = useNavigate();
@@ -36,7 +36,7 @@ const MultiplayerGamePage: React.FC = () => {
       if (location.state?.autoJoinQueue) {
         setIsInQueue(true);
         console.log('Auto-joining queue with socket ID:', newSocket.id);
-        newSocket.emit('join_queue');
+        newSocket.emit('join_queue', { gameType: 'tic-tac-toe' });
       }
     });
 
@@ -65,10 +65,10 @@ const MultiplayerGamePage: React.FC = () => {
     });
 
     // Listen for game created event
-    newSocket.on('game_created', (gameId: string) => {
-      console.log('Game created, navigating to game room:', gameId, 'Socket ID:', newSocket.id);
+    newSocket.on('game_created', (data: { gameId: number; gameType: string }) => {
+      console.log('Game created, navigating to game room:', data.gameId, 'Socket ID:', newSocket.id);
       setIsInQueue(false);
-      navigate(`/tictactoe/multiplayer/game/${gameId}`);
+      navigate(`/tictactoe/multiplayer/game/${data.gameId}`);
     });
 
     setSocket(newSocket);
@@ -95,7 +95,7 @@ const MultiplayerGamePage: React.FC = () => {
     console.log('Joining queue with socket ID:', socket.id);
     setError(''); // Clear any previous errors
     setIsInQueue(true);
-    socket.emit('join_queue');
+    socket.emit('join_queue', { gameType: 'tic-tac-toe' });
   };
 
   const handleCancelQueue = () => {

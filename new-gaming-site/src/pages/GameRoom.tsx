@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import io from 'socket.io-client';
-import API_ENDPOINTS from '../config/api';
+import { endpoints } from '../config/api';
 import { GameState, PlayerSymbol, GameStatus, isPlayerTurn } from '../game/gameLogic';
 
 interface PlayerAssignedData {
@@ -27,7 +27,7 @@ interface PlayerAssignedData {
   playerOTimeRemaining: number;
 }
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 const GameRoom: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
@@ -54,6 +54,83 @@ const GameRoom: React.FC = () => {
     }
   }, []);
 
+  // Update displayed times when game state changes
+  useEffect(() => {
+    if (game) {
+      console.log('Game state changed, updating displayed times:', {
+        playerXTimeRemaining: game.playerXTimeRemaining,
+        playerOTimeRemaining: game.playerOTimeRemaining,
+        lastMoveTimestamp: game.lastMoveTimestamp
+      });
+      // Only update the displayed times if the server sent new time remaining values
+      if (game.playerXTimeRemaining !== displayedTimes.playerX || game.playerOTimeRemaining !== displayedTimes.playerO) {
+        setDisplayedTimes({
+          playerX: game.playerXTimeRemaining,
+          playerO: game.playerOTimeRemaining
+        });
+      }
+    }
+  }, [game?.playerXTimeRemaining, game?.playerOTimeRemaining]);
+
+  // Client-side timer countdown
+  useEffect(() => {
+    if (!game || game.gameStatus !== 'active') return;
+
+    console.log('Timer effect started with game state:', {
+      playerXTimeRemaining: game.playerXTimeRemaining,
+      playerOTimeRemaining: game.playerOTimeRemaining,
+      lastMoveTimestamp: game.lastMoveTimestamp,
+      nextPlayer: game.nextPlayer
+    });
+
+    const lastMoveTime = new Date(game.lastMoveTimestamp).getTime();
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - lastMoveTime) / 1000);
+      
+      setDisplayedTimes(prev => {
+        const currentPlayer = game.nextPlayer;
+        const newTimes = { ...prev };
+        
+        if (currentPlayer === 'X') {
+          // Only count down if it's X's turn
+          newTimes.playerX = Math.max(0, game.playerXTimeRemaining - elapsedSeconds);
+          // Check if time has expired
+          if (newTimes.playerX <= 0) {
+            // Update game state to show end game message
+            setGame(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                gameStatus: 'ended',
+                winner: 'O'
+              };
+            });
+          }
+        } else {
+          // Only count down if it's O's turn
+          newTimes.playerO = Math.max(0, game.playerOTimeRemaining - elapsedSeconds);
+          // Check if time has expired
+          if (newTimes.playerO <= 0) {
+            // Update game state to show end game message
+            setGame(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                gameStatus: 'ended',
+                winner: 'X'
+              };
+            });
+          }
+        }
+        
+        return newTimes;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [game?.gameStatus, game?.nextPlayer, game?.lastMoveTimestamp, game?.playerXTimeRemaining, game?.playerOTimeRemaining]);
+
   // Set up socket connection and game state management
   useEffect(() => {
     const numericGameId = parseInt(gameId || '');
@@ -73,7 +150,7 @@ const GameRoom: React.FC = () => {
         }
 
         console.log('Fetching game data for ID:', numericGameId);
-        const response = await fetch(API_ENDPOINTS.games.get(numericGameId), {
+        const response = await fetch(endpoints.get(numericGameId), {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -112,39 +189,40 @@ const GameRoom: React.FC = () => {
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: 5,
-        reconnectionDelay: 1000
+        reconnectionDelay: 1000,
+        query: {
+          gameType: 'tic-tac-toe'
+        }
       });
 
       newSocket.on('connect', () => {
         console.log('Connected to game room with socket ID:', newSocket.id);
         console.log('Emitting join_game with ID:', numericGameId);
-        newSocket.emit('join_game', numericGameId);
-
-        if (location.state?.autoJoinQueue) {
-          setIsInQueue(true);
-          newSocket.emit('join_queue');
-        }
+        newSocket.emit('join_game', { gameId: numericGameId });
       });
 
       newSocket.on('player_assigned', (data: { player: PlayerSymbol; gameState: GameState }) => {
         console.log('Player assigned:', data);
-        console.log('Game state received:', data.gameState);
-        console.log('Current player symbol:', playerSymbol);
-        console.log('New player symbol:', data.player);
         setPlayerSymbol(data.player);
         setGame(data.gameState);
       });
 
       newSocket.on('game_update', (updatedGame: GameState) => {
         console.log('Received game update:', updatedGame);
-        console.log('Current game state:', game);
-        console.log('Game status changed:', game?.gameStatus, '->', updatedGame.gameStatus);
-        console.log('Winner:', updatedGame.winner);
-        console.log('Is game over:', updatedGame.gameStatus === 'ended' || updatedGame.gameStatus === 'draw');
-        console.log('Current player symbol:', playerSymbol);
-        
-        // Update game state
         setGame(updatedGame);
+      });
+
+      newSocket.on('time_expired', (data: { winner: PlayerSymbol; loser: PlayerSymbol; message: string }) => {
+        console.log('Time expired:', data);
+        // Update game state to show end game message
+        setGame(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            gameStatus: 'ended',
+            winner: data.winner
+          };
+        });
       });
 
       newSocket.on('error', (error: any) => {
@@ -162,7 +240,7 @@ const GameRoom: React.FC = () => {
     };
 
     setupGame();
-  }, [gameId, location.state]);
+  }, [gameId]);
 
   // Add logging for game state changes
   useEffect(() => {
@@ -170,77 +248,6 @@ const GameRoom: React.FC = () => {
     console.log('Current player symbol:', playerSymbol);
     console.log('Socket connected:', !!socket);
   }, [game, playerSymbol, socket]);
-
-  // Timer countdown effect
-  useEffect(() => {
-    if (!game || game.gameStatus !== 'active') return;
-
-    console.log('Timer effect started with game state:', {
-      playerXTimeRemaining: game.playerXTimeRemaining,
-      playerOTimeRemaining: game.playerOTimeRemaining,
-      lastMoveTimestamp: game.lastMoveTimestamp,
-      nextPlayer: game.nextPlayer
-    });
-
-    // Initialize displayed times with current game state
-    setDisplayedTimes({
-      playerX: game.playerXTimeRemaining,
-      playerO: game.playerOTimeRemaining
-    });
-
-    const startTime = Date.now();
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const elapsedSeconds = Math.floor((now - startTime) / 1000);
-      
-      setDisplayedTimes(prev => {
-        const currentPlayer = game.nextPlayer;
-        const newTimes = { ...prev };
-        
-        if (currentPlayer === 'X') {
-          newTimes.playerX = Math.max(0, game.playerXTimeRemaining - elapsedSeconds);
-          // Check if X's time has expired
-          if (newTimes.playerX === 0 && game.gameStatus === 'active') {
-            console.log('Player X time expired');
-            socket?.emit('time_expired', { gameId: game.id, player: 'X' });
-            // Force game state update to show end game message
-            setGame(prev => prev ? {
-              ...prev,
-              gameStatus: 'ended',
-              winner: 'O',
-              playerXTimeRemaining: 0,
-              playerOTimeRemaining: 0
-            } : null);
-          }
-        } else {
-          newTimes.playerO = Math.max(0, game.playerOTimeRemaining - elapsedSeconds);
-          // Check if O's time has expired
-          if (newTimes.playerO === 0 && game.gameStatus === 'active') {
-            console.log('Player O time expired');
-            socket?.emit('time_expired', { gameId: game.id, player: 'O' });
-            // Force game state update to show end game message
-            setGame(prev => prev ? {
-              ...prev,
-              gameStatus: 'ended',
-              winner: 'X',
-              playerXTimeRemaining: 0,
-              playerOTimeRemaining: 0
-            } : null);
-          }
-        }
-        
-        console.log('Timer update:', {
-          elapsedSeconds,
-          currentPlayer,
-          newTimes
-        });
-        
-        return newTimes;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [game?.gameStatus, game?.nextPlayer, game?.playerXTimeRemaining, game?.playerOTimeRemaining, socket, game?.id]);
 
   const handleMove = async (index: number) => {
     console.log('handleMove called with index:', index);
@@ -285,8 +292,12 @@ const GameRoom: React.FC = () => {
   };
 
   const handlePlayAgain = () => {
-    // Navigate to multiplayer page and auto-join queue
-    navigate('/tictactoe/multiplayer', { state: { autoJoinQueue: true } });
+    // Clean up socket connection before navigation
+    if (socket) {
+      socket.disconnect();
+    }
+    // Navigate to multiplayer page without auto-join
+    navigate('/tictactoe/multiplayer', { replace: true });
   };
 
   const handleReturnHome = () => {

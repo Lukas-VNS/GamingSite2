@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import API_ENDPOINTS from '../config/api';
+import { endpoints } from '../config/api';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ const LoginPage: React.FC = () => {
     try {
       console.log('Attempting login with:', { username: formData.username });
       
-      const response = await fetch(API_ENDPOINTS.login, {
+      const response = await fetch(endpoints.login, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

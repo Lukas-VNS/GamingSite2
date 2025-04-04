@@ -25,11 +25,6 @@ yarn-error.log*
 # local env files
 ../sshsetup.sh
 sshsetup.sh
-.env*.local
-.env
-.env.development
-.env.test
-.env.production
 
 # vercel
 .vercel

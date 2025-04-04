@@ -1,48 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { socketService } from '../../services/socketService';
-import { GameStatus, TicTacToeSymbol, TicTacToeBoard } from '../../types';
-import Square from './Square';
+import { GameStatus, Connect4Symbol, Connect4Board } from '../../types';
 
-interface MultiplayerBoardProps {
+interface Connect4MultiplayerBoardProps {
   gameId: number;
-  initialSquares: TicTacToeBoard;
+  initialBoard: Connect4Board;
   initialGameStatus: GameStatus;
-  initialPlayer?: TicTacToeSymbol;
+  initialPlayer?: Connect4Symbol;
 }
 
-const MultiplayerBoard: React.FC<MultiplayerBoardProps> = ({
+const Connect4MultiplayerBoard: React.FC<Connect4MultiplayerBoardProps> = ({
   gameId,
-  initialSquares,
+  initialBoard,
   initialGameStatus,
   initialPlayer
 }) => {
-  const [squares, setSquares] = useState<TicTacToeBoard>(initialSquares);
+  const [board, setBoard] = useState<Connect4Board>(initialBoard);
   const [gameStatus, setGameStatus] = useState<GameStatus>(initialGameStatus);
-  const [player, setPlayer] = useState<TicTacToeSymbol | undefined>(initialPlayer);
+  const [player, setPlayer] = useState<Connect4Symbol | undefined>(initialPlayer);
   const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
   const [playersConnected, setPlayersConnected] = useState<number>(0);
   const [amIReady, setAmIReady] = useState<boolean>(false);
-  const [readyStatus, setReadyStatus] = useState<{ X: boolean; O: boolean }>({ X: false, O: false });
-  const [timers, setTimers] = useState<{ X: number; O: number }>({ X: 300, O: 300 });
+  const [readyStatus, setReadyStatus] = useState<{ red: boolean; yellow: boolean }>({ red: false, yellow: false });
   const [status, setStatus] = useState<string>('');
 
   useEffect(() => {
     socketService.connect();
-    socketService.joinTicTacToeGame(gameId);
+    socketService.joinConnect4Game(gameId);
     
-    socketService.onTicTacToePlayerAssigned((data) => {
+    socketService.onConnect4PlayerAssigned((data) => {
       setPlayer(data.player);
-      setIsMyTurn(data.player === 'X');
+      setIsMyTurn(data.player === 'red');
       setPlayersConnected(2);
     });
     
-    socketService.onTicTacToeGameUpdate((data) => {
-      setSquares(data.squares);
+    socketService.onConnect4GameUpdate((data) => {
+      setBoard(data.board);
       setGameStatus(data.gameStatus);
       setStatus(data.gameStatus === 'ended' ? `Game Over! ${data.winner ? `Player ${data.winner} wins!` : "It's a draw!"}` : '');
     });
 
-    socketService.onTicTacToeError((data) => {
+    socketService.onConnect4Error((data) => {
       setStatus(data.message);
     });
 
@@ -52,12 +50,12 @@ const MultiplayerBoard: React.FC<MultiplayerBoardProps> = ({
     };
   }, [gameId]);
 
-  const handleClick = (i: number) => {
-    if (!player || !isMyTurn || gameStatus !== 'active' || squares[i]) {
+  const handleColumnClick = (col: number) => {
+    if (!gameId || !player) {
       return;
     }
-    
-    socketService.makeTicTacToeMove(gameId, i, player);
+
+    socketService.makeConnect4Move(gameId, col);
   };
 
   const handleReady = () => {
@@ -75,13 +73,21 @@ const MultiplayerBoard: React.FC<MultiplayerBoardProps> = ({
     <div className="game-board">
       <div className="status">{status}</div>
       <div className="board">
-        {squares.map((square, i) => (
-          <Square
-            key={i}
-            value={square}
-            onClick={() => handleClick(i)}
-            disabled={!isMyTurn || gameStatus !== 'active'}
-          />
+        {board.map((row, rowIndex) => (
+          <div key={rowIndex} className="flex">
+            {row.map((cell, colIndex) => (
+              <button
+                key={`${rowIndex}-${colIndex}`}
+                className={`w-16 h-16 border border-gray-400 rounded-full m-1 ${
+                  cell === 'red' ? 'bg-red-500' :
+                  cell === 'yellow' ? 'bg-yellow-500' :
+                  'bg-white'
+                }`}
+                onClick={() => handleColumnClick(colIndex)}
+                disabled={!isMyTurn || gameStatus !== 'active'}
+              />
+            ))}
+          </div>
         ))}
       </div>
       {!amIReady && gameStatus === 'waiting' && (
@@ -94,4 +100,4 @@ const MultiplayerBoard: React.FC<MultiplayerBoardProps> = ({
   );
 };
 
-export default MultiplayerBoard; 
+export default Connect4MultiplayerBoard; 

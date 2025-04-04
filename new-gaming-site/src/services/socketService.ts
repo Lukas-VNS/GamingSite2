@@ -1,151 +1,121 @@
-import io from 'socket.io-client';
-import { Socket } from 'socket.io-client';
-
-interface GameUpdateData {
-  squares: Array<'X' | 'O' | null>;
-  nextPlayer: 'X' | 'O';
-  readyStatus: {
-    X: boolean;
-    O: boolean;
-  };
-  timers: {
-    X: number;
-    O: number;
-  };
-  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
-  winner: 'X' | 'O' | null;
-  winReason?: 'timeout' | 'disconnect';
-}
-
-interface ReadyUpdateData {
-  readyStatus: {
-    X: boolean;
-    O: boolean;
-  };
-}
-
-interface TimerUpdateData {
-  timers: {
-    X: number;
-    O: number;
-  };
-}
-
-interface PlayerAssignedData {
-  player: 'X' | 'O';
-  playersConnected: number;
-  readyStatus: {
-    X: boolean;
-    O: boolean;
-  };
-  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
-  winner: 'X' | 'O' | null;
-}
-
-interface PlayersUpdateData {
-  count: number;
-}
+import { PlayerSymbol, GameStatus } from '../types';
+import ticTacToeSocketService from './ticTacToeSocketService';
+import connect4SocketService from './connect4SocketService';
 
 class SocketService {
-  private socket: typeof Socket | null = null;
-  private readonly serverUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+  private static instance: SocketService;
+  private connect4Socket: typeof connect4SocketService;
+  private ticTacToeSocket: typeof ticTacToeSocketService;
+
+  private constructor() {
+    this.connect4Socket = connect4SocketService;
+    this.ticTacToeSocket = ticTacToeSocketService;
+  }
+
+  public static getInstance(): SocketService {
+    if (!SocketService.instance) {
+      SocketService.instance = new SocketService();
+    }
+    return SocketService.instance;
+  }
 
   connect(): void {
-    console.log('Attempting to connect to:', this.serverUrl);
-    this.socket = io(this.serverUrl, {
-      path: '/socket.io',
-      transports: ['websocket', 'polling']
-    });
-    
-    this.socket.on('connect', () => {
-      console.log('Connected to server with ID:', this.socket?.id);
-    });
-    
-    this.socket.on('connect_error', (error: Error) => {
-      console.error('Connection error details:', error);
-    });
+    this.connect4Socket.connect();
+    this.ticTacToeSocket.connect();
   }
 
   disconnect(): void {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    this.connect4Socket.disconnect();
+    this.ticTacToeSocket.disconnect();
   }
 
-  joinGame(gameId: string): void {
-    if (this.socket) {
-      this.socket.emit('join_game', gameId);
-    }
-  }
-
-  // Make sure this function exists and works correctly
-  setPlayerReady(gameId: string, player: 'X' | 'O'): void {
-    if (this.socket) {
-      console.log(`Emitting player_ready for ${player} in game ${gameId}`);
-      this.socket.emit('player_ready', { gameId, player });
+  // Connect 4 methods
+  joinConnect4Game(gameId?: number): void {
+    if (gameId) {
+      this.connect4Socket.joinGame(gameId);
     } else {
-      console.error('Socket not connected');
+      this.connect4Socket.joinQueue();
     }
   }
 
-  makeMove(gameId: string, position: number, player: 'X' | 'O'): void {
-    if (this.socket) {
-      this.socket.emit('make_move', { gameId, position, player });
+  makeConnect4Move(gameId: number, column: number): void {
+    this.connect4Socket.makeMove(gameId, column);
+  }
+
+  onConnect4Queued(callback: (data: { message: string }) => void): void {
+    this.connect4Socket.onQueued(callback);
+  }
+
+  onConnect4PlayerAssigned(callback: (data: { player: 'red' | 'yellow'; gameState: any }) => void): void {
+    this.connect4Socket.onPlayerAssigned(callback);
+  }
+
+  onConnect4GameUpdate(callback: (data: any) => void): void {
+    this.connect4Socket.onGameUpdate(callback);
+  }
+
+  onConnect4Error(callback: (data: { message: string }) => void): void {
+    this.connect4Socket.onError(callback);
+  }
+
+  onConnect4TimeExpired(callback: (data: { gameId: number; winner: 'red' | 'yellow'; loser: 'red' | 'yellow'; message: string }) => void): void {
+    this.connect4Socket.onTimeExpired(callback);
+  }
+
+  onConnect4Disconnect(callback: () => void): void {
+    this.connect4Socket.onDisconnect(callback);
+  }
+
+  onConnect4ConnectError(callback: (error: unknown) => void): void {
+    this.connect4Socket.onConnectError(callback);
+  }
+
+  // Tic Tac Toe methods
+  joinTicTacToeGame(gameId?: number): void {
+    if (gameId) {
+      this.ticTacToeSocket.joinGame(gameId);
+    } else {
+      this.ticTacToeSocket.joinQueue();
     }
   }
 
-  resetGame(gameId: string): void {
-    if (this.socket) {
-      this.socket.emit('reset_game', gameId);
-    }
+  makeTicTacToeMove(gameId: number, position: number, player: 'X' | 'O'): void {
+    this.ticTacToeSocket.makeMove(gameId, position, player);
   }
 
-  onPlayerAssigned(callback: (data: PlayerAssignedData) => void): void {
-    if (this.socket) {
-      this.socket.on('player_assigned', callback);
-    }
+  onTicTacToeQueued(callback: (data: { message: string }) => void): void {
+    this.ticTacToeSocket.onQueued(callback);
   }
 
-  onPlayersUpdate(callback: (data: PlayersUpdateData) => void): void {
-    if (this.socket) {
-      this.socket.on('players_update', callback);
-    }
+  onTicTacToePlayerAssigned(callback: (data: { player: 'X' | 'O'; gameState: any }) => void): void {
+    this.ticTacToeSocket.onPlayerAssigned(callback as any); // Type assertion needed due to type mismatch
   }
 
-  onReadyUpdate(callback: (data: ReadyUpdateData) => void): void {
-    if (this.socket) {
-      this.socket.on('ready_update', callback);
-    }
+  onTicTacToeGameUpdate(callback: (data: any) => void): void {
+    this.ticTacToeSocket.onGameUpdate(callback);
   }
 
-  onGameUpdate(callback: (data: GameUpdateData) => void): void {
-    if (this.socket) {
-      this.socket.on('game_update', callback);
-    }
+  onTicTacToeError(callback: (data: { message: string }) => void): void {
+    this.ticTacToeSocket.onError(callback);
   }
 
-  onTimerUpdate(callback: (data: TimerUpdateData) => void): void {
-    if (this.socket) {
-      this.socket.on('timer_update', callback);
-    }
+  onTicTacToeDisconnect(callback: () => void): void {
+    this.ticTacToeSocket.onDisconnect(callback);
+  }
+
+  onTicTacToeConnectError(callback: (error: unknown) => void): void {
+    this.ticTacToeSocket.onConnectError(callback);
+  }
+
+  onDisconnect(callback: () => void): void {
+    this.connect4Socket.onDisconnect(callback);
+    this.ticTacToeSocket.onDisconnect(callback);
   }
 
   removeAllListeners(): void {
-    if (this.socket) {
-      this.socket.off('player_assigned');
-      this.socket.off('players_update');
-      this.socket.off('ready_update');
-      this.socket.off('game_update');
-      this.socket.off('timer_update');
-    }
-  }
-
-  getSocketId(): string | undefined {
-    return this.socket?.id;
+    this.connect4Socket.removeAllListeners();
+    this.ticTacToeSocket.removeAllListeners();
   }
 }
 
-// Create an instance and export it
-const socketServiceInstance = new SocketService();
-export default socketServiceInstance; 
+export const socketService = SocketService.getInstance(); 

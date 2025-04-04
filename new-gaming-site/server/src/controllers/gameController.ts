@@ -385,4 +385,53 @@ export const getGameById = async (req: Request, res: Response): Promise<void> =>
     console.error('Error getting game:', error);
     res.status(500).json({ message: 'Server error' });
   }
+};
+
+// Get Connect 4 game by ID
+export const getConnect4GameById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const gameId = parseInt(req.params.gameId);
+
+    console.log(`[GET_CONNECT4_GAME] Attempting to get game ${gameId} for user ${userId}`);
+
+    if (!userId) {
+      console.log(`[GET_CONNECT4_GAME] No user ID found in request`);
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    if (isNaN(gameId)) {
+      console.log(`[GET_CONNECT4_GAME] Invalid game ID: ${req.params.gameId}`);
+      res.status(400).json({ message: 'Invalid game ID' });
+      return;
+    }
+
+    const game = await prisma.connect4Game.findUnique({
+      where: { id: gameId },
+      include: {
+        playerRed: true,
+        playerYellow: true
+      }
+    });
+
+    if (!game) {
+      console.log(`[GET_CONNECT4_GAME] Game ${gameId} not found`);
+      res.status(404).json({ message: 'Game not found' });
+      return;
+    }
+
+    // Simple check: is the user either playerRed or playerYellow?
+    if (game.playerRedId !== userId && game.playerYellowId !== userId) {
+      console.log(`[GET_CONNECT4_GAME] User ${userId} is not a player in game ${gameId}`);
+      res.status(403).json({ message: 'Not a player in this game' });
+      return;
+    }
+
+    console.log(`[GET_CONNECT4_GAME] User ${userId} is authorized to view game ${gameId}`);
+    res.json({ game });
+  } catch (error) {
+    console.error('[GET_CONNECT4_GAME] Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 }; 
