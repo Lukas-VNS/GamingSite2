@@ -5,12 +5,10 @@ import { checkConnect4Winner, isConnect4Draw, getLowestEmptyPosition } from '../
 import { PlayerSymbol, GameStatus } from '../types';
 import { verifyToken } from '../middleware/auth';
 import { createGame, updateGame, getGame } from '../services/gameService';
+import { queueService } from '../services/queueService';
 import { logger } from '../utils/logger';
 
 const prisma = new PrismaClient();
-
-// Separate queue for Connect 4
-const connect4Queue: Array<{ socketId: string; userId: string }> = [];
 
 // Global timer check interval
 let timerCheckInterval: NodeJS.Timeout | null = null;
@@ -179,26 +177,29 @@ export const setupConnect4Handlers = async (io: Server, socket: Socket) => {
           return;
         }
 
-        const existingInQueue = connect4Queue.find(q => q.socketId === socket.id);
-        if (existingInQueue) {
-          logger.warn('[CONNECT4] Socket already in queue:', socket.id);
-          return;
-        }
-
-        logger.info('[CONNECT4] Adding socket to queue:', socket.id);
-        connect4Queue.push({ socketId: socket.id, userId: decoded.userId });
+        // Add to queue using the queue service
+        queueService.addToQueue({
+          socketId: socket.id,
+          userId: decoded.userId,
+          gameType: 'connect4'
+        });
 
         // Send queue joined event to the player
         socket.emit('queue_joined', { message: 'You have been added to the queue' });
 
-        if (connect4Queue.length >= 2) {
-          const [player1, player2] = connect4Queue.splice(0, 2);
+        // Check for waiting players
+        const waitingPlayers = queueService.getWaitingPlayers('connect4');
+        if (waitingPlayers.length >= 2) {
+          const [player1, player2] = waitingPlayers;
           logger.info('[CONNECT4] Creating new game with players:', {
             player1: player1.userId,
             player2: player2.userId
           });
 
-          // Get socket instances
+          // Remove players from queue
+          queueService.removePlayersFromQueue([player1.userId, player2.userId]);
+
+          // Verify both players are still connected
           const player1Socket = io.sockets.sockets.get(player1.socketId);
           const player2Socket = io.sockets.sockets.get(player2.socketId);
 
@@ -207,37 +208,37 @@ export const setupConnect4Handlers = async (io: Server, socket: Socket) => {
             return;
           }
 
-          const game = await createGame({
-            playerRedId: player1.userId,
-            playerYellowId: player2.userId,
-            gameStatus: 'waiting',
-            board: Array(6).fill(null).map(() => Array(7).fill(null)),
-            nextPlayer: 'red',
-            playerRedTimeRemaining: 60,
-            playerYellowTimeRemaining: 60
+          const game = await prisma.connect4Game.create({
+            data: {
+              board: Array(6).fill(null).map(() => Array(7).fill(null)),
+              nextPlayer: 'red',
+              gameStatus: 'waiting',
+              playerRedId: player1.userId,
+              playerYellowId: player2.userId,
+              lastMoveTimestamp: new Date(),
+              playerRedTimeRemaining: 60,
+              playerYellowTimeRemaining: 60
+            },
+            include: {
+              playerRed: true,
+              playerYellow: true
+            }
           });
 
-          logger.info('[CONNECT4] Game created:', game.id);
+          // Make sure both players are in their user rooms
+          player1Socket.join(`user:${player1.userId}`);
+          player2Socket.join(`user:${player2.userId}`);
 
-          // Assign players and send initial game state
-          player1Socket.emit('player_assigned', { player: 'red', gameState: game });
-          player2Socket.emit('player_assigned', { player: 'yellow', gameState: game });
+          // Emit game creation event to both players
+          io.to(`user:${player1.userId}`).emit('game_created', {
+            gameId: game.id,
+            gameType: 'connect4'
+          });
 
-          // Join game room
-          player1Socket.join(`game:${game.id}`);
-          player2Socket.join(`game:${game.id}`);
-
-          // Start game after 5 seconds
-          setTimeout(async () => {
-            try {
-              const updatedGame = await updateGame(game.id, { gameStatus: 'active' });
-              io.to(`game:${game.id}`).emit('game_update', updatedGame);
-              logger.info('[CONNECT4] Game started:', game.id);
-            } catch (error) {
-              logger.error('[CONNECT4] Error starting game:', error);
-              io.to(`game:${game.id}`).emit('error', { message: 'Failed to start game' });
-            }
-          }, 5000);
+          io.to(`user:${player2.userId}`).emit('game_created', {
+            gameId: game.id,
+            gameType: 'connect4'
+          });
         }
       } catch (error) {
         logger.error('[CONNECT4] Error in join_queue:', error);
@@ -387,14 +388,13 @@ export const setupConnect4Handlers = async (io: Server, socket: Socket) => {
     });
 
     socket.on('disconnect', () => {
+      // Remove from queue using the queue service
+      queueService.removeFromQueue(socket.id);
+
       logger.info('[CONNECT4] Socket disconnected:', socket.id);
-      const queueIndex = connect4Queue.findIndex(q => q.socketId === socket.id);
-      if (queueIndex !== -1) {
-        connect4Queue.splice(queueIndex, 1);
-      }
     });
   } catch (error) {
-    logger.error('[CONNECT4] Error in socket connection:', error);
+    logger.error('[CONNECT4] Error in setupConnect4Handlers:', error);
     socket.disconnect();
   }
 }; 
