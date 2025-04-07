@@ -72,7 +72,7 @@ class Connect4SocketService extends BaseSocketService {
     this.emit('make_move', { gameId, column });
   }
 
-  onGameCreated(callback: (data: { gameId: number; gameType: 'connect4' }) => void): void {
+  onGameCreated(callback: (data: { gameId: number; gameType: 'connect4'; player: 'red' | 'yellow' }) => void): void {
     this.on('game_created', callback);
   }
 

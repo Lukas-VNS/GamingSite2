@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface GameStats {
   player1: number;
@@ -37,10 +38,10 @@ const LocalGamePage: React.FC<LocalGamePageProps> = ({
   isDraw,
   onMove
 }) => {
+  const navigate = useNavigate();
   const [gameStarted, setGameStarted] = useState(false);
   const [board, setBoard] = useState(initialBoard);
   const [isPlayer1Next, setIsPlayer1Next] = useState(true);
-  const [player1Starts, setPlayer1Starts] = useState(true);
   const [stats, setStats] = useState<GameStats>({
     player1: 0,
     player2: 0,
@@ -52,15 +53,6 @@ const LocalGamePage: React.FC<LocalGamePageProps> = ({
     setGameStarted(true);
     setBoard(initialBoard);
     setIsPlayer1Next(true);
-    setPlayer1Starts(true);
-    setGameEnded(false);
-  };
-
-  const handleNextGame = () => {
-    setBoard(initialBoard);
-    const nextStarter = !player1Starts;
-    setPlayer1Starts(nextStarter);
-    setIsPlayer1Next(nextStarter);
     setGameEnded(false);
   };
 
@@ -75,12 +67,22 @@ const LocalGamePage: React.FC<LocalGamePageProps> = ({
 
     if (winner || isGameDraw) {
       setGameEnded(true);
-      setStats(prevStats => ({
-        ...prevStats,
-        ...(winner === player1Name ? { player1: prevStats.player1 + 1 } :
-            winner === player2Name ? { player2: prevStats.player2 + 1 } :
-            { draws: prevStats.draws + 1 })
-      }));
+      setStats(prevStats => {
+        if (winner) {
+          const winnerLower = winner.toLowerCase();
+          const player1Lower = player1Name.toLowerCase();
+          const player2Lower = player2Name.toLowerCase();
+          
+          if (winnerLower === player1Lower) {
+            return { ...prevStats, player1: prevStats.player1 + 1 };
+          } else if (winnerLower === player2Lower) {
+            return { ...prevStats, player2: prevStats.player2 + 1 };
+          }
+        } else if (isGameDraw) {
+          return { ...prevStats, draws: prevStats.draws + 1 };
+        }
+        return prevStats;
+      });
     } else {
       setIsPlayer1Next(!isPlayer1Next);
     }
@@ -89,7 +91,7 @@ const LocalGamePage: React.FC<LocalGamePageProps> = ({
   const getGameStatus = () => {
     const winner = checkWinner(board);
     if (winner) {
-      return `Winner: ${winner === player1Name ? player1Name : player2Name}`;
+      return `Winner: ${winner === player1Name.toLowerCase() ? player1Name : player2Name}`;
     }
     if (isDraw(board)) {
       return "It's a draw!";
@@ -144,19 +146,11 @@ const LocalGamePage: React.FC<LocalGamePageProps> = ({
           </div>
 
           <div className="space-x-4">
-            {(gameEnded || isDraw(board)) && (
-              <button
-                onClick={handleNextGame}
-                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md transition-colors"
-              >
-                Next Game
-              </button>
-            )}
             <button
-              onClick={handleStartGame}
+              onClick={() => navigate('/')}
               className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-md transition-colors"
             >
-              Reset Game
+              Go to Home
             </button>
           </div>
         </div>

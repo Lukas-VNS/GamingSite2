@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { socketService } from '../services/socketService';
+import socketService from '../services/socketService';
 import Connect4Board from '../components/Game/Connect4Board';
 import { PlayerSymbol, checkWinner, getLowestEmptyPosition } from '../game/connect4Logic';
 

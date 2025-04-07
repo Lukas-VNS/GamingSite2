@@ -19,11 +19,8 @@ const Connect4LocalPage: React.FC = () => {
     />
   );
 
-  const handleConnect4Move = (board: Array<Array<PlayerSymbol | null>>, isPlayer1Next: boolean) => {
+  const handleConnect4Move = (board: Array<Array<PlayerSymbol | null>>, isPlayer1Next: boolean, col: number) => {
     const newBoard = board.map(row => [...row]);
-    const col = board[0].findIndex((cell, index) => board.every(row => row[index] === null));
-    if (col === -1) return board;
-
     const position = getLowestEmptyPosition(newBoard, col);
     if (position === null) return board;
 
@@ -36,6 +33,12 @@ const Connect4LocalPage: React.FC = () => {
     return board.every(row => row.every(cell => cell !== null));
   };
 
+  const checkConnect4Winner = (board: Array<Array<PlayerSymbol | null>>) => {
+    // Convert 2D array to 1D for the checkWinner function
+    const flatBoard = board.flat();
+    return checkWinner(flatBoard);
+  };
+
   return (
     <LocalGamePage
       title="Connect 4"
@@ -46,7 +49,7 @@ const Connect4LocalPage: React.FC = () => {
       player2Color="yellow"
       initialBoard={Array(BOARD_HEIGHT).fill(null).map(() => Array(BOARD_WIDTH).fill(null))}
       renderBoard={renderConnect4Board}
-      checkWinner={(board) => checkWinner(board.flat())}
+      checkWinner={checkConnect4Winner}
       isDraw={isConnect4Draw}
       onMove={handleConnect4Move}
     />

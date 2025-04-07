@@ -232,12 +232,14 @@ export const setupConnect4Handlers = async (io: Server, socket: Socket) => {
           // Emit game creation event to both players
           io.to(`user:${player1.userId}`).emit('game_created', {
             gameId: game.id,
-            gameType: 'connect4'
+            gameType: 'connect4',
+            player: 'red'
           });
 
           io.to(`user:${player2.userId}`).emit('game_created', {
             gameId: game.id,
-            gameType: 'connect4'
+            gameType: 'connect4',
+            player: 'yellow'
           });
         }
       } catch (error) {

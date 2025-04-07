@@ -72,7 +72,7 @@ class TicTacToeSocketService extends BaseSocketService {
     this.emit('make_move', { gameId, position, player });
   }
 
-  onGameCreated(callback: (data: { gameId: number; gameType: 'tic-tac-toe' }) => void): void {
+  onGameCreated(callback: (data: { gameId: number; gameType: 'tic-tac-toe'; player: 'X' | 'O' }) => void): void {
     this.on('game_created', callback);
   }
 

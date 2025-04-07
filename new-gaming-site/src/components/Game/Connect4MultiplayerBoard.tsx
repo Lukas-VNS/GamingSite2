@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { socketService } from '../../services/socketService';
-import { GameStatus, Connect4Symbol, Connect4Board } from '../../types';
+import React from 'react';
+import BaseMultiplayerBoard from './shared/BaseMultiplayerBoard';
+import { Connect4Board, Connect4Symbol, GameStatus } from '../../types';
+import socketService from '../../services/socketService';
 
 interface Connect4MultiplayerBoardProps {
   gameId: number;
@@ -15,88 +16,47 @@ const Connect4MultiplayerBoard: React.FC<Connect4MultiplayerBoardProps> = ({
   initialGameStatus,
   initialPlayer
 }) => {
-  const [board, setBoard] = useState<Connect4Board>(initialBoard);
-  const [gameStatus, setGameStatus] = useState<GameStatus>(initialGameStatus);
-  const [player, setPlayer] = useState<Connect4Symbol | undefined>(initialPlayer);
-  const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
-  const [playersConnected, setPlayersConnected] = useState<number>(0);
-  const [amIReady, setAmIReady] = useState<boolean>(false);
-  const [readyStatus, setReadyStatus] = useState<{ red: boolean; yellow: boolean }>({ red: false, yellow: false });
-  const [status, setStatus] = useState<string>('');
+  const renderConnect4Board = ({ board, onMove, disabled }: { 
+    board: Connect4Board, 
+    onMove: (col: number) => void, 
+    disabled: boolean 
+  }) => (
+    <div className="flex justify-center p-1 sm:p-2">
+      {board[0].map((_, col) => (
+        <div key={col} className="flex flex-col">
+          {board.map((row, rowIndex) => (
+            <button
+              key={`${rowIndex}-${col}`}
+              className={`w-16 h-16 border border-gray-400 rounded-full m-1 ${
+                row[col] === 'red' ? 'bg-red-500' :
+                row[col] === 'yellow' ? 'bg-yellow-500' :
+                'bg-white'
+              }`}
+              onClick={() => onMove(col)}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 
-  useEffect(() => {
-    socketService.connect();
-    socketService.joinConnect4Game(gameId);
-    
-    socketService.onConnect4PlayerAssigned((data) => {
-      setPlayer(data.player);
-      setIsMyTurn(data.player === 'red');
-      setPlayersConnected(2);
-    });
-    
-    socketService.onConnect4GameUpdate((data) => {
-      setBoard(data.board);
-      setGameStatus(data.gameStatus);
-      setStatus(data.gameStatus === 'ended' ? `Game Over! ${data.winner ? `Player ${data.winner} wins!` : "It's a draw!"}` : '');
-    });
-
-    socketService.onConnect4Error((data) => {
-      setStatus(data.message);
-    });
-
-    return () => {
-      socketService.removeAllListeners();
-      socketService.disconnect();
-    };
-  }, [gameId]);
-
-  const handleColumnClick = (col: number) => {
-    if (!gameId || !player) {
-      return;
+  const handleMove = (gameId: number, position: number, player: Connect4Symbol | 'X' | 'O') => {
+    if (player === 'red' || player === 'yellow') {
+      socketService.makeConnect4Move(gameId, position);
     }
-
-    socketService.makeConnect4Move(gameId, col);
-  };
-
-  const handleReady = () => {
-    if (player && !amIReady && gameStatus === 'waiting') {
-      console.log(`Setting player ${player} as ready`);
-      setAmIReady(true);
-    }
-  };
-
-  const handleReset = () => {
-    setAmIReady(false);
   };
 
   return (
-    <div className="game-board">
-      <div className="status">{status}</div>
-      <div className="board">
-        {board.map((row, rowIndex) => (
-          <div key={rowIndex} className="flex">
-            {row.map((cell, colIndex) => (
-              <button
-                key={`${rowIndex}-${colIndex}`}
-                className={`w-16 h-16 border border-gray-400 rounded-full m-1 ${
-                  cell === 'red' ? 'bg-red-500' :
-                  cell === 'yellow' ? 'bg-yellow-500' :
-                  'bg-white'
-                }`}
-                onClick={() => handleColumnClick(colIndex)}
-                disabled={!isMyTurn || gameStatus !== 'active'}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-      {!amIReady && gameStatus === 'waiting' && (
-        <button onClick={handleReady}>Ready</button>
-      )}
-      {gameStatus === 'ended' && (
-        <button onClick={handleReset}>Play Again</button>
-      )}
-    </div>
+    <BaseMultiplayerBoard
+      gameId={gameId}
+      gameType="connect4"
+      initialBoard={initialBoard}
+      initialGameStatus={initialGameStatus}
+      initialPlayer={initialPlayer}
+      onMove={handleMove}
+      renderBoard={renderConnect4Board}
+    />
   );
 };
 

@@ -2,6 +2,20 @@ import { PlayerSymbol, GameStatus } from '../types';
 import ticTacToeSocketService from './ticTacToeSocketService';
 import connect4SocketService from './connect4SocketService';
 
+interface GameCreatedData {
+  gameId: number;
+  gameType: 'connect4' | 'tic-tac-toe';
+  player: PlayerSymbol;
+}
+
+interface GameUpdateData {
+  gameType: 'connect4' | 'tic-tac-toe';
+  squares?: any[];
+  board?: any[][];
+  gameStatus: GameStatus;
+  winner: PlayerSymbol | null;
+}
+
 class SocketService {
   private static instance: SocketService;
   private connect4Socket: typeof connect4SocketService;
@@ -29,6 +43,55 @@ class SocketService {
     this.ticTacToeSocket.disconnect();
   }
 
+  // Common event listeners
+  onQueued(callback: (data: { message: string }) => void): void {
+    this.connect4Socket.onQueued(callback);
+    this.ticTacToeSocket.onQueued(callback);
+  }
+
+  onGameCreated(callback: (data: GameCreatedData) => void): void {
+    this.connect4Socket.onGameCreated((data) => {
+      callback({ ...data, player: data.player as PlayerSymbol });
+    });
+    this.ticTacToeSocket.onGameCreated((data) => {
+      callback({ ...data, player: data.player as PlayerSymbol });
+    });
+  }
+
+  onGameUpdate(callback: (data: GameUpdateData) => void): void {
+    this.connect4Socket.onGameUpdate((data) => {
+      callback({
+        gameType: 'connect4',
+        board: data.board,
+        gameStatus: data.gameStatus,
+        winner: data.winner
+      });
+    });
+    this.ticTacToeSocket.onGameUpdate((data) => {
+      callback({
+        gameType: 'tic-tac-toe',
+        squares: data.squares,
+        gameStatus: data.gameStatus,
+        winner: data.winner
+      });
+    });
+  }
+
+  onError(callback: (data: { message: string }) => void): void {
+    this.connect4Socket.onError(callback);
+    this.ticTacToeSocket.onError(callback);
+  }
+
+  onDisconnect(callback: () => void): void {
+    this.connect4Socket.onDisconnect(callback);
+    this.ticTacToeSocket.onDisconnect(callback);
+  }
+
+  removeAllListeners(): void {
+    this.connect4Socket.removeAllListeners();
+    this.ticTacToeSocket.removeAllListeners();
+  }
+
   // Connect 4 methods
   joinConnect4Game(gameId?: number): void {
     if (gameId) {
@@ -40,10 +103,6 @@ class SocketService {
 
   makeConnect4Move(gameId: number, column: number): void {
     this.connect4Socket.makeMove(gameId, column);
-  }
-
-  onConnect4Queued(callback: (data: { message: string }) => void): void {
-    this.connect4Socket.onQueued(callback);
   }
 
   onConnect4PlayerAssigned(callback: (data: { player: 'red' | 'yellow'; gameState: any }) => void): void {
@@ -79,12 +138,8 @@ class SocketService {
     }
   }
 
-  makeTicTacToeMove(gameId: number, position: number, player: 'X' | 'O'): void {
-    this.ticTacToeSocket.makeMove(gameId, position, player);
-  }
-
-  onTicTacToeQueued(callback: (data: { message: string }) => void): void {
-    this.ticTacToeSocket.onQueued(callback);
+  makeTicTacToeMove(gameId: number, square: number, player: 'X' | 'O'): void {
+    this.ticTacToeSocket.makeMove(gameId, square, player);
   }
 
   onTicTacToePlayerAssigned(callback: (data: { player: 'X' | 'O'; gameState: any }) => void): void {
@@ -95,10 +150,6 @@ class SocketService {
     this.ticTacToeSocket.onGameUpdate(callback);
   }
 
-  onTicTacToeError(callback: (data: { message: string }) => void): void {
-    this.ticTacToeSocket.onError(callback);
-  }
-
   onTicTacToeDisconnect(callback: () => void): void {
     this.ticTacToeSocket.onDisconnect(callback);
   }
@@ -106,16 +157,6 @@ class SocketService {
   onTicTacToeConnectError(callback: (error: unknown) => void): void {
     this.ticTacToeSocket.onConnectError(callback);
   }
-
-  onDisconnect(callback: () => void): void {
-    this.connect4Socket.onDisconnect(callback);
-    this.ticTacToeSocket.onDisconnect(callback);
-  }
-
-  removeAllListeners(): void {
-    this.connect4Socket.removeAllListeners();
-    this.ticTacToeSocket.removeAllListeners();
-  }
 }
 
-export const socketService = SocketService.getInstance(); 
+export default SocketService.getInstance(); 
