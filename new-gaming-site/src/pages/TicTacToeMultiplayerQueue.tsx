@@ -1,15 +1,15 @@
 import React from 'react';
 import GameQueue from '../components/Game/shared/GameQueue';
 
-const TicTacToeMultiplayerPage: React.FC = () => {
+const TicTacToeMultiplayerQueue: React.FC = () => {
   return (
     <GameQueue
       gameType="tictactoe"
-      gamePath="/tic-tac-toe/game"
-      returnPath="/tic-tac-toe/multiplayer"
+      gamePath="/tictactoe/game"
+      returnPath="/tictactoe/multiplayerqueue"
       title="Multiplayer Tic Tac Toe"
     />
   );
 };
 
-export default TicTacToeMultiplayerPage; 
+export default TicTacToeMultiplayerQueue; 

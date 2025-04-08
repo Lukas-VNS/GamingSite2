@@ -1,6 +1,3 @@
-// This is your Prisma schema file
-// Learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,49 +7,35 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum GameState {
+  WAITING
+  ACTIVE
+  PLAYER1_WIN
+  PLAYER2_WIN
+  DRAW
+}
+
 model Game {
   id            Int       @id @default(autoincrement())
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  squares       Json      // Stores the game board state
-  nextPlayer    String    // 'X' or 'O'
-  gameStatus    String    // 'waiting', 'active', 'ended', 'draw'
-  winner        String?   // 'X', 'O', or null
+  gameType      String    // 'tic-tac-toe' or 'connect4'
+  boardState    Json      // Stores the game board state (either 3x3 or 6x7 grid)
+  nextPlayer    Int       // 1 or 2 (referring to player1 or player2)
+  state         GameState @default(WAITING)
   moves         Move[]    // Game history
-  playerX       User      @relation("PlayerX", fields: [playerXId], references: [id])
-  playerXId     String
-  playerO       User      @relation("PlayerO", fields: [playerOId], references: [id])
-  playerOId     String
-  playerXReady  Boolean   @default(false)
-  playerOReady  Boolean   @default(false)
-  players       Player[]  // Add opposite relation for Player model
-  // Timer fields
-  playerXTimeRemaining Int @default(60)  // Time in seconds
-  playerOTimeRemaining Int @default(60)  // Time in seconds
-  lastMoveTimestamp   DateTime @default(now())
-}
-
-model Player {
-  id            String    @id @default(uuid())
-  socketId      String    @unique
-  symbol        String    // 'X' or 'O'
-  isReady       Boolean   @default(false)
-  timeRemaining Int       @default(60)
-  gameId        Int       // Changed from String to Int
-  game          Game      @relation(fields: [gameId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  player1       User      @relation("Player1", fields: [player1Id], references: [id])
+  player1Id     String
+  player2       User      @relation("Player2", fields: [player2Id], references: [id])
+  player2Id     String
 }
 
 model Move {
   id            Int       @id @default(autoincrement())
-  position      Int
-  symbol        String    // 'X' or 'O'
-  gameId        Int       // Changed from String to Int
+  position      Int       // For Tic Tac Toe: 0-8, For Connect 4: 0-6
+  playerNumber  Int       // 1 or 2 (referring to player1 or player2)
+  gameId        Int
   game          Game      @relation(fields: [gameId], references: [id])
   playedAt      DateTime  @default(now())
-  playerId      String    // ID of the user who made the move
-  player        User      @relation(fields: [playerId], references: [id])
 }
 
 model User {
@@ -61,70 +44,6 @@ model User {
   email         String    @unique
   password      String
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  gamesAsX      Game[]    @relation("PlayerX")
-  gamesAsO      Game[]    @relation("PlayerO")
-  moves         Move[]
-  gamesAsRed    Connect4Game[]  @relation("PlayerRed")
-  gamesAsYellow Connect4Game[]  @relation("PlayerYellow")
-  connect4Moves Connect4Move[]
-  queuesAsPlayer1 Queue[] @relation("Player1Queue")
-  queuesAsPlayer2 Queue[] @relation("Player2Queue")
-}
-
-model Connect4Game {
-  id            Int       @id @default(autoincrement())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  board         Json      // Stores the game board state (6x7 grid)
-  nextPlayer    String    // 'red' or 'yellow'
-  gameStatus    String    // 'waiting', 'active', 'ended', 'draw'
-  winner        String?   // 'red', 'yellow', or null
-  moves         Connect4Move[]    // Game history
-  playerRed     User      @relation("PlayerRed", fields: [playerRedId], references: [id])
-  playerRedId   String
-  playerYellow  User      @relation("PlayerYellow", fields: [playerYellowId], references: [id])
-  playerYellowId String
-  playerRedReady    Boolean   @default(false)
-  playerYellowReady Boolean   @default(false)
-  players       Connect4Player[]  // Add opposite relation for Connect4Player model
-  // Timer fields
-  playerRedTimeRemaining    Int @default(60)  // Time in seconds
-  playerYellowTimeRemaining Int @default(60)  // Time in seconds
-  lastMoveTimestamp        DateTime @default(now())
-}
-
-model Connect4Player {
-  id            String    @id @default(uuid())
-  socketId      String    @unique
-  symbol        String    // 'red' or 'yellow'
-  isReady       Boolean   @default(false)
-  timeRemaining Int       @default(60)
-  gameId        Int
-  game          Connect4Game  @relation(fields: [gameId], references: [id])
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-}
-
-model Connect4Move {
-  id            Int       @id @default(autoincrement())
-  column        Int       // Column number (0-6)
-  symbol        String    // 'red' or 'yellow'
-  gameId        Int
-  game          Connect4Game  @relation(fields: [gameId], references: [id])
-  playedAt      DateTime  @default(now())
-  playerId      String
-  player        User      @relation(fields: [playerId], references: [id])
-}
-
-model Queue {
-  id          Int      @id @default(autoincrement())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  gameType    String   // 'tic-tac-toe' or 'connect4'
-  status      String   // 'waiting' or 'matched'
-  player1Id   String
-  player2Id   String?
-  player1     User     @relation("Player1Queue", fields: [player1Id], references: [id])
-  player2     User?    @relation("Player2Queue", fields: [player2Id], references: [id])
+  gamesAsPlayer1 Game[]   @relation("Player1")
+  gamesAsPlayer2 Game[]   @relation("Player2")
 }

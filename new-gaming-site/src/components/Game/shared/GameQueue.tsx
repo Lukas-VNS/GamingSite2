@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import socketService from '../../../services/socketService';
 
 interface GameQueueProps {
-  gameType: 'tic-tac-toe' | 'connect4';
+  gameType: 'tictactoe' | 'connect4';
   gamePath: string;
   returnPath: string;
   title: string;
@@ -74,8 +74,10 @@ const GameQueue: React.FC<GameQueueProps> = ({
     setIsInQueue(true);
     if (gameType === 'connect4') {
       socketService.joinConnect4Game();
-    } else {
+    } else if (gameType === 'tictactoe') {
       socketService.joinTicTacToeGame();
+    } else {
+      console.error('Invalid game type:', gameType);
     }
   };
 
@@ -102,7 +104,7 @@ const GameQueue: React.FC<GameQueueProps> = ({
           {!isInQueue ? (
             <div>
               <p className="text-gray-300 mb-6">
-                Click Ready to join the queue and find an opponent!
+                Click Ready to find an opponent! TEST TEST TEST
               </p>
               <button
                 onClick={handleJoinQueue}

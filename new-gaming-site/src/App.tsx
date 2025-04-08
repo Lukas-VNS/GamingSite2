@@ -1,9 +1,8 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
 import HomePage from './pages/HomePage';
 import GamePage from './pages/GamePage';
-import MultiplayerGamePage from './pages/MultiplayerGamePage';
+import TicTacToeMultiplayerQueue from './pages/TicTacToeMultiplayerQueue';
 import GameRoom from './pages/GameRoom';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -36,9 +35,9 @@ function App() {
               <GamePage />
             </ProtectedRoute>
           } />
-          <Route path="/tictactoe/multiplayer" element={
+          <Route path="/tictactoe/multiplayerqueue" element={
             <ProtectedRoute>
-              <MultiplayerGamePage />
+              <TicTacToeMultiplayerQueue />
             </ProtectedRoute>
           } />
           <Route path="/tictactoe/multiplayer/game/:gameId" element={

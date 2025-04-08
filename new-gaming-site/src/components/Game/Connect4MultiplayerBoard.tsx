@@ -21,13 +21,13 @@ const Connect4MultiplayerBoard: React.FC<Connect4MultiplayerBoardProps> = ({
     onMove: (col: number) => void, 
     disabled: boolean 
   }) => (
-    <div className="flex justify-center p-1 sm:p-2">
+    <div className="grid grid-cols-7 gap-0 bg-white shadow-lg rounded-lg overflow-hidden">
       {board[0].map((_, col) => (
         <div key={col} className="flex flex-col">
           {board.map((row, rowIndex) => (
             <button
               key={`${rowIndex}-${col}`}
-              className={`w-16 h-16 border border-gray-400 rounded-full m-1 ${
+              className={`w-16 h-16 border border-gray-200 flex items-center justify-center ${
                 row[col] === 'red' ? 'bg-red-500' :
                 row[col] === 'yellow' ? 'bg-yellow-500' :
                 'bg-white'

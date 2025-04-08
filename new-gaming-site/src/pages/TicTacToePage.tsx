@@ -21,7 +21,7 @@ const TicTacToePage: React.FC = () => {
       gameType="tictactoe"
       gameDescription="Get three in a row horizontally, vertically, or diagonally to win! Take turns placing your mark (X or O) on the board. Play locally with friends or challenge players online for an exciting match."
       localGamePath="/tictactoe/local"
-      multiplayerGamePath="/tictactoe/multiplayer"
+      multiplayerGamePath="/tictactoe/multiplayerqueue"
       renderGamePreview={renderTicTacToePreview}
     />
   );
