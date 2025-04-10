@@ -11,7 +11,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 interface SignupRequest {
   username: string;
-  email: string;
   password: string;
 }
 
@@ -39,21 +38,6 @@ export const signup = async (
       return;
     }
 
-    // Generate a unique email using username and timestamp
-    const timestamp = Math.floor(Date.now() / 1000); // UTC timestamp in seconds
-    let uniqueEmail = `${username}${timestamp}@dev.com`;
-    
-    // Check if email exists and generate a new one if needed
-    let emailExists = await prisma.user.findUnique({
-      where: { email: uniqueEmail }
-    });
-
-    // If email exists, append a random number to make it unique
-    if (emailExists) {
-      const randomNum = Math.floor(Math.random() * 1000);
-      uniqueEmail = `${username}${timestamp}${randomNum}@dev.com`;
-    }
-
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log('Password hashed successfully');
@@ -62,15 +46,14 @@ export const signup = async (
     const user = await prisma.user.create({
       data: {
         username,
-        email: uniqueEmail,
         password: hashedPassword
       }
     });
-    console.log('User created successfully:', { id: user.id, email: user.email });
+    console.log('User created successfully:', { id: user.id });
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -81,7 +64,6 @@ export const signup = async (
       user: {
         id: user.id,
         username: user.username,
-        email: user.email
       }
     });
   } catch (error) {
@@ -128,7 +110,7 @@ export const login = async (
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email },
+      { userId: user.id },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -140,8 +122,7 @@ export const login = async (
       token,
       user: {
         id: user.id,
-        username: user.username,
-        email: user.email
+        username: user.username
       }
     });
   } catch (error) {
@@ -163,8 +144,7 @@ export const getUser = async (req: Request, res: Response): Promise<void> => {
       where: { id: userId },
       select: {
         id: true,
-        username: true,
-        email: true
+        username: true
       }
     });
 

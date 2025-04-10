@@ -21,7 +21,7 @@ const Connect4LandingPage: React.FC = () => {
       gameType="connect4"
       gameDescription="Drop your pieces into any column and try to connect four of your pieces horizontally, vertically, or diagonally. The first player to connect four pieces wins! Play locally with friends or challenge players online for an exciting match."
       localGamePath="/connect4/local"
-      multiplayerGamePath="/connect4/multiplayer"
+      multiplayerGamePath="/connect4/multiplayerqueue"
       renderGamePreview={renderConnect4Preview}
     />
   );

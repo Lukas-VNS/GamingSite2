@@ -48,11 +48,15 @@ const LocalGamePage: React.FC<LocalGamePageProps> = ({
     draws: 0
   });
   const [gameEnded, setGameEnded] = useState(false);
+  const [lastStartingPlayer, setLastStartingPlayer] = useState<'player1' | 'player2'>('player2');
 
   const handleStartGame = () => {
     setGameStarted(true);
     setBoard(initialBoard);
-    setIsPlayer1Next(true);
+    // Alternate starting player
+    const nextStartingPlayer = lastStartingPlayer === 'player1' ? 'player2' : 'player1';
+    setLastStartingPlayer(nextStartingPlayer);
+    setIsPlayer1Next(nextStartingPlayer === 'player1');
     setGameEnded(false);
   };
 
@@ -146,6 +150,14 @@ const LocalGamePage: React.FC<LocalGamePageProps> = ({
           </div>
 
           <div className="space-x-4">
+            {gameEnded && (
+              <button
+                onClick={handleStartGame}
+                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md transition-colors"
+              >
+                Play Again
+              </button>
+            )}
             <button
               onClick={() => navigate('/')}
               className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-md transition-colors"

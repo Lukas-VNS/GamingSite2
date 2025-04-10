@@ -55,4 +55,20 @@ export interface GameState {
   playerRedTimeRemaining?: number;
   playerYellowTimeRemaining?: number;
   lastMoveTimestamp: string;
+}
+
+export interface TicTacToeGameState {
+  id: string;
+  board: Array<string | null>;
+  nextPlayer: 'X' | 'O';
+  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
+  winner: 'X' | 'O' | null;
+}
+
+export interface Connect4GameState {
+  id: string;
+  board: Array<Array<string | null>>;
+  nextPlayer: 'red' | 'yellow';
+  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
+  winner: 'red' | 'yellow' | null;
 } 

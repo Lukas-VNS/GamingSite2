@@ -31,18 +31,18 @@ export interface GameState {
   nextPlayer: PlayerSymbol;
   gameStatus: GameStatus;
   winner: PlayerSymbol | null;
-  playerX: {
+  player1: {
     id: string;
     username: string;
   };
-  playerO: {
+  player2: {
     id: string;
     username: string;
   };
-  playerXId: string;
-  playerOId: string;
-  playerXTimeRemaining: number;
-  playerOTimeRemaining: number;
+  player1Id: string;
+  player2Id: string;
+  player1TimeRemaining: number;
+  player2TimeRemaining: number;
   lastMoveTimestamp: string;
 }
 
@@ -84,6 +84,6 @@ export function isPlayerTurn(
   gameState: GameState,
   playerSymbol: PlayerSymbol
 ): boolean {
-  const isPlayerX = gameState.playerXId === currentUserId;
+  const isPlayerX = gameState.player1Id === currentUserId;
   return (isPlayerX && playerSymbol === 'X') || (!isPlayerX && playerSymbol === 'O');
 } 

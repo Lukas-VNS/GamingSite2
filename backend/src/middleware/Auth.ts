@@ -10,7 +10,6 @@ declare global {
       user?: {
         id: string;
         username: string;
-        email: string;
       };
     }
   }
@@ -28,7 +27,6 @@ export const authenticateToken: RequestHandler = async (req: Request, res: Respo
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as {
       userId: string;
-      email: string;
     };
     
     // Fetch complete user information from database
@@ -36,8 +34,7 @@ export const authenticateToken: RequestHandler = async (req: Request, res: Respo
       where: { id: decoded.userId },
       select: {
         id: true,
-        username: true,
-        email: true
+        username: true
       }
     });
 

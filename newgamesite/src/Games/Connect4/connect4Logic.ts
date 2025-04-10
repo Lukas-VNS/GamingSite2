@@ -3,7 +3,7 @@ export type GameStatus = 'waiting' | 'active' | 'ended' | 'draw';
 
 export interface GameState {
   id: number;
-  board: Array<PlayerSymbol | null>;
+  board: Array<Array<PlayerSymbol | null>>;
   nextPlayer: PlayerSymbol;
   gameStatus: GameStatus;
   winner: PlayerSymbol | null;

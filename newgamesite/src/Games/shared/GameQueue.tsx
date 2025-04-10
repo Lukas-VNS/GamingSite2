@@ -1,12 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import SocketService from '../shared/Sockets/SocketService';
+import io from 'socket.io-client';
 
 interface GameQueueProps {
   gameType: 'tictactoe' | 'connect4';
   gamePath: string;
   returnPath: string;
   title: string;
+}
+
+interface QueueStatus {
+  position: number;
+  totalPlayers: number;
 }
 
 const GameQueue: React.FC<GameQueueProps> = ({
@@ -18,72 +23,76 @@ const GameQueue: React.FC<GameQueueProps> = ({
   const navigate = useNavigate();
   const [isInQueue, setIsInQueue] = useState(false);
   const [error, setError] = useState<string>('');
-  const [isConnected, setIsConnected] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
+  const [socket, setSocket] = useState<ReturnType<typeof io> | null>(null);
 
   useEffect(() => {
-    // Connect to socket when component mounts
-    SocketService.connect();
-    setIsConnected(true);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Not authenticated');
+      return;
+    }
 
-    // Set up socket event listeners based on game type
-    const queuedHandler = (data: { message: string }) => {
-      console.log(`[${gameType.toUpperCase()}] Queued:`, data);
-      setIsInQueue(true);
-    };
+    // Initialize socket connection
+    const newSocket = io(process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080', {
+      auth: {
+        token
+      }
+    });
 
-    const playerAssignedHandler = (data: any) => {
-      console.log(`[${gameType.toUpperCase()}] Player assigned:`, data);
+    newSocket.on('connect', () => {
+      console.log('Connected to queue server');
+    });
+
+    newSocket.on('queue-update', (status: QueueStatus) => {
+      setQueueStatus(status);
+    });
+
+    newSocket.on('game-found', (data: { gameId: string; opponent: string }) => {
+      navigate(`${gamePath}/${data.gameId}`);
+    });
+
+    newSocket.on('error', (error: { message: string }) => {
+      setError(error.message);
       setIsInQueue(false);
-      
-      const gameId = data.gameId;
-      navigate(`/${gameType}/multiplayer/game/${gameId}`);
-    };
+    });
 
-    const errorHandler = (data: { message: string }) => {
-      console.error(`[${gameType.toUpperCase()}] Socket error:`, data);
-      setError(data.message || 'An error occurred');
-      setIsInQueue(false);
-    };
+    setSocket(newSocket);
 
-    const disconnectHandler = () => {
-      console.log(`[${gameType.toUpperCase()}] Disconnected from server`);
-      setIsConnected(false);
-      setIsInQueue(false);
-    };
-
-    // Add event listeners
-    SocketService.onQueued(queuedHandler);
-    SocketService.onGameCreated(playerAssignedHandler);
-    // SocketService.onError(errorHandler);
-    SocketService.onDisconnect(disconnectHandler);
-
-    // Cleanup function
+    // Cleanup on unmount
     return () => {
-      SocketService.removeAllListeners();
-      SocketService.disconnect();
+      if (newSocket) {
+        newSocket.disconnect();
+      }
     };
-  }, [navigate, gameType]);
+  }, [gamePath, navigate]);
 
   const handleJoinQueue = () => {
-    if (!isConnected) {
-      setError('Not connected to server. Please try again.');
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Not authenticated');
+      return;
+    }
+
+    if (!socket) {
+      setError('Not connected to server');
       return;
     }
 
     setError('');
     setIsInQueue(true);
-    if (gameType === 'connect4') {
-      // SocketService.joinConnect4Game();
-    } else if (gameType === 'tictactoe') {
-      // SocketService.joinTicTacToeGame();
-    } else {
-      console.error('Invalid game type:', gameType);
-    }
+    socket.emit('join-queue', { gameType, token });
   };
 
   const handleCancelQueue = () => {
+    if (!socket) {
+      setError('Not connected to server');
+      return;
+    }
+
+    socket.emit('leave-queue', { gameType });
     setIsInQueue(false);
-    SocketService.disconnect();
+    setQueueStatus(null);
     navigate(returnPath);
   };
 
@@ -104,14 +113,13 @@ const GameQueue: React.FC<GameQueueProps> = ({
           {!isInQueue ? (
             <div>
               <p className="text-gray-300 mb-6">
-                Click Ready to find an opponent! TEST TEST TEST
+                Click Ready to find an opponent!
               </p>
               <button
                 onClick={handleJoinQueue}
                 className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-md transition-colors text-lg font-semibold"
-                disabled={!isConnected}
               >
-                {isConnected ? 'Ready' : 'Connecting...'}
+                Ready
               </button>
             </div>
           ) : (
@@ -119,6 +127,11 @@ const GameQueue: React.FC<GameQueueProps> = ({
               <div className="animate-pulse mb-6">
                 <p className="text-xl mb-4">Searching for opponent...</p>
                 <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                {queueStatus && (
+                  <p className="mt-4 text-gray-300">
+                    Position in queue: {queueStatus.position} of {queueStatus.totalPlayers}
+                  </p>
+                )}
               </div>
               <button
                 onClick={handleCancelQueue}

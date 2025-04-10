@@ -5,7 +5,7 @@ const TicTacToeMultiplayerQueue: React.FC = () => {
   return (
     <GameQueue
       gameType="tictactoe"
-      gamePath="/tictactoe/game"
+      gamePath="/tictactoe/multiplayer/game"
       returnPath="/tictactoe/multiplayerqueue"
       title="Multiplayer Tic Tac Toe"
     />
