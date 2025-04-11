@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../prisma/prisma';
 
 declare global {
   namespace Express {
@@ -58,4 +56,14 @@ export async function verifyToken(token: string): Promise<{ userId: string } | n
   } catch (error) {
     return null;
   }
-} 
+}
+
+export const verifyTokenAndGetUserId = (token: string): string | null => {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as { userId: string };
+    return decoded.userId;
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    return null;
+  }
+}; 

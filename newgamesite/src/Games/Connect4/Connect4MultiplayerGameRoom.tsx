@@ -1,73 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { GameState, PlayerSymbol, GameStatus } from './connect4Logic';
+import React from 'react';
 import MultiplayerGameRoom from '../shared/MultiplayerGameRoom';
+import Connect4Board from './Connect4Board';
+import { PlayerSymbol } from './connect4Logic';
 
-export const Connect4MultiplayerGameRoom: React.FC = () => {
-  const { gameId } = useParams<{ gameId: string }>();
-  const navigate = useNavigate();
-  const [gameState, setGameState] = useState<GameState | null>(null);
+interface Connect4MultiplayerGameRoomProps {
+  boardState?: any;
+  onMove?: (position: number) => void;
+  isActive?: boolean;
+  currentPlayer?: string;
+  currentUserId?: string;
+}
 
-  useEffect(() => {
-    if (!gameId) {
-      navigate('/');
-      return;
-    }
-
-    // TODO: Implement socket connection and game state updates
-    // This will be added when we implement multiplayer functionality
-  }, [gameId, navigate]);
-
-  const handleMove = (column: number) => {
-    if (!gameState || gameState.gameStatus !== 'active') return;
-    // TODO: Implement move handling with socket service
-  };
-
-  if (!gameState) {
-    return <div>Loading game...</div>;
-  }
-
-  const gameStatus = {
-    isActive: gameState.gameStatus === 'active',
-    isEnded: gameState.gameStatus === 'ended' || gameState.gameStatus === 'draw',
-    isDraw: gameState.gameStatus === 'draw',
-    winner: gameState.winner,
-    currentPlayer: gameState.nextPlayer,
-    player1: {
-      id: gameState.playerRedId,
-      username: gameState.playerRed.username,
-      timeRemaining: gameState.playerRedTimeRemaining
-    },
-    player2: {
-      id: gameState.playerYellowId,
-      username: gameState.playerYellow.username,
-      timeRemaining: gameState.playerYellowTimeRemaining
-    }
+export const Connect4MultiplayerGameRoom: React.FC<Connect4MultiplayerGameRoomProps> = ({
+  boardState,
+  onMove,
+  isActive,
+  currentPlayer,
+  currentUserId
+}) => {
+  const handleColumnClick = (column: number) => {
+    if (!isActive || currentPlayer !== currentUserId) return;
+    onMove?.(column);
   };
 
   return (
     <MultiplayerGameRoom
       gameType="connect4"
       title="Connect 4 Multiplayer"
-      gameStatus={gameStatus}
-      onMove={handleMove}
+      onMove={onMove}
     >
-      <div className="connect4-board">
-        {gameState.board.map((column, colIndex) => (
-          <div
-            key={colIndex}
-            className="connect4-column"
-            onClick={() => handleMove(colIndex)}
-          >
-            {column.map((cell, rowIndex) => (
-              <div
-                key={`${colIndex}-${rowIndex}`}
-                className={`connect4-cell ${cell || 'empty'}`}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+      <Connect4Board
+        board={boardState || Array(6).fill(null).map(() => Array(7).fill(null))}
+        onColumnClick={handleColumnClick}
+      />
     </MultiplayerGameRoom>
   );
 };

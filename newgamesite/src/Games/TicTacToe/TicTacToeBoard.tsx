@@ -12,7 +12,8 @@ const TicTacToeBoard: React.FC<TicTacToeBoardProps> = ({ squares, onClick, disab
       <button
         className={`w-20 h-20 border-2 border-gray-300 flex items-center justify-center text-4xl font-bold
           ${squares[index] === 'X' ? 'text-blue-500' : 'text-red-500'}
-          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'}`}
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'}
+          ${squares[index] !== '' ? 'cursor-not-allowed' : ''}`}
         onClick={() => onClick(index)}
         disabled={disabled || squares[index] !== ''}
       >

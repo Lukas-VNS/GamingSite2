@@ -13,9 +13,8 @@ const Connect4LocalPage: React.FC = () => {
     disabled: boolean 
   }) => (
     <Connect4Board
-      squares={board}
+      board={board}
       onColumnClick={onMove}
-      disabled={disabled}
     />
   );
 
@@ -25,7 +24,7 @@ const Connect4LocalPage: React.FC = () => {
     if (position === null) return board;
 
     const [row, column] = position;
-    newBoard[row][column] = isPlayer1Next ? 'red' : 'yellow';
+    newBoard[row][column] = isPlayer1Next ? 'player1' : 'player2';
     return newBoard;
   };
 

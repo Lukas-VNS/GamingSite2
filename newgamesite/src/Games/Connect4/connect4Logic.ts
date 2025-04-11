@@ -1,26 +1,27 @@
-export type PlayerSymbol = 'red' | 'yellow';
+export type PlayerSymbol = 'player1' | 'player2';
 export type GameStatus = 'waiting' | 'active' | 'ended' | 'draw';
 
-export interface GameState {
+export type GameState = {
   id: number;
-  board: Array<Array<PlayerSymbol | null>>;
-  nextPlayer: PlayerSymbol;
-  gameStatus: GameStatus;
-  winner: PlayerSymbol | null;
-  playerRed: {
+  board: string[][];
+  boardState?: number[][];
+  nextPlayer: 'player1' | 'player2';
+  gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
+  winner: string | null;
+  player1?: {
     id: string;
     username: string;
   };
-  playerYellow: {
+  player2?: {
     id: string;
     username: string;
   };
-  playerRedId: string;
-  playerYellowId: string;
-  playerRedTimeRemaining: number;
-  playerYellowTimeRemaining: number;
+  player1Id: string;
+  player2Id: string;
+  player1TimeRemaining: number;
+  player2TimeRemaining: number;
   lastMoveTimestamp: string;
-}
+};
 
 const BOARD_WIDTH = 7;
 const BOARD_HEIGHT = 6;
@@ -89,7 +90,7 @@ export function isValidMove(squares: Array<PlayerSymbol | null>, position: numbe
 }
 
 export function getNextPlayer(currentPlayer: PlayerSymbol): PlayerSymbol {
-  return currentPlayer === 'red' ? 'yellow' : 'red';
+  return currentPlayer === 'player1' ? 'player2' : 'player1';
 }
 
 export function isPlayerTurn(
@@ -97,8 +98,8 @@ export function isPlayerTurn(
   gameState: GameState,
   playerSymbol: PlayerSymbol
 ): boolean {
-  const isPlayerRed = gameState.playerRedId === currentUserId;
-  return (isPlayerRed && playerSymbol === 'red') || (!isPlayerRed && playerSymbol === 'yellow');
+  const isPlayer1 = gameState.player1Id === currentUserId;
+  return (isPlayer1 && playerSymbol === 'player1') || (!isPlayer1 && playerSymbol === 'player2');
 }
 
 export function getLowestEmptyPosition(board: Array<Array<PlayerSymbol | null>>, col: number): [number, number] | null {
