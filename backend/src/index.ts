@@ -8,8 +8,6 @@ import gameRoutes from './routes/GameRoutes';
 import { QueueManager } from './controllers/QueueManager';
 import { TicTacToeServer } from './controllers/TicTacToeServer';
 import { Connect4Server } from './controllers/Connect4Server';
-import { verifyToken, verifyTokenAndGetUserId } from './middleware/Auth';
-import { prisma } from '../prisma/prisma';
 
 dotenv.config();
 
@@ -39,68 +37,22 @@ app.use('/api/games', gameRoutes);
 
 // Initialize QueueManager and Game Servers
 const queueManager = QueueManager.getInstance(io);
+
+// Initialize game servers - socket handlers will be set up by the first one
 const ticTacToeServer = new TicTacToeServer(io);
 const connect4Server = new Connect4Server(io);
 
-// Setup socket handlers for game servers
-ticTacToeServer.setupSocketHandlers();
-connect4Server.setupSocketHandlers();
-
-// Socket connection handling
-io.on('connection', async (socket) => {
-  try {
-    const userId = await verifyTokenAndGetUserId(socket.handshake.auth.token);
-    if (!userId) {
-      socket.disconnect();
-      return;
-    }
-
-    // Set the userId in the socket's data object
-    socket.data.userId = userId;
-    console.log('Socket connected with userId:', userId);
-
-    // Handle queue events
-    socket.on('join-queue', async (data: { gameType: 'tictactoe' | 'connect4', token: string }) => {
-      try {
-        const decoded = await verifyToken(data.token);
-        if (!decoded) {
-          socket.emit('error', { message: 'Invalid token' });
-          return;
-        }
-
-        // Get user info from database
-        const user = await prisma.user.findUnique({
-          where: { id: decoded.userId },
-          select: { id: true, username: true }
-        });
-
-        if (!user) {
-          socket.emit('error', { message: 'User not found' });
-          return;
-        }
-
-        await queueManager.joinQueue(socket, user.id, user.username, data.gameType);
-      } catch (error) {
-        socket.emit('error', { message: error instanceof Error ? error.message : 'Unknown error' });
-      }
-    });
-
-    socket.on('leave-queue', (data: { gameType: 'tictactoe' | 'connect4' }) => {
-      queueManager.leaveQueue(socket.id, data.gameType);
-    });
-
-    socket.on('disconnect', () => {
-      // Remove from all queues on disconnect
-      queueManager.leaveQueue(socket.id, 'tictactoe');
-      queueManager.leaveQueue(socket.id, 'connect4');
-      console.log('Client disconnected:', socket.id);
-    });
-
-  } catch (error) {
-    console.error('Error in socket connection:', error);
-    socket.disconnect();
+// Add a method to route the game type to the correct server
+const routeGameType = (gameType: string) => {
+  switch (gameType) {
+    case 'tictactoe':
+      return ticTacToeServer;
+    case 'connect4':
+      return connect4Server;
+    default:
+      throw new Error(`Invalid game type: ${gameType}`);
   }
-});
+};
 
 const PORT = process.env.PORT || 8080;
 httpServer.listen(PORT, () => {

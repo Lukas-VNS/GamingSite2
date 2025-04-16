@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MultiplayerGameRoom from '../shared/MultiplayerGameRoom';
 import TicTacToeBoard from './TicTacToeBoard';
 import { useParams } from 'react-router-dom';
-import io from 'socket.io-client';
+import { useGameSocket } from '../../context/GameSocketContext';
 
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080';
 const TIME_LIMIT = 60 * 1;
 
 export const TicTacToeMultiplayerGameRoom: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [socket, setSocket] = useState<typeof io.Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const { socket, isConnected } = useGameSocket();
   const [gameStatus, setGameStatus] = useState({
     isActive: false,
     isEnded: false,
@@ -27,54 +25,72 @@ export const TicTacToeMultiplayerGameRoom: React.FC = () => {
       username: 'Waiting for player...'
     },
     boardState: Array(9).fill(''),
-    player1Time: TIME_LIMIT, // 1 minute for TicTacToe
+    player1Time: TIME_LIMIT,
     player2Time: TIME_LIMIT
   });
+  const hasJoinedGame = useRef(false);
+  const joinGameEmitted = useRef(false);
 
-  // Get current user ID from token and set up socket
+  // Get current user ID from token
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) {
-      console.log('Not authenticated');
-      return;
-    }
+    if (!token) return;
 
     const payload = JSON.parse(atob(token.split('.')[1]));
     setCurrentUserId(payload.userId);
+  }, []);
 
-    const newSocket = io(API_BASE_URL, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+  // Handle joining the game
+  useEffect(() => {
+    console.log('Join game effect running:', {
+      socketId: socket?.id,
+      isConnected,
+      gameId,
+      hasJoined: hasJoinedGame.current,
+      joinGameEmitted: joinGameEmitted.current
     });
 
-    const handleConnect = () => {
-      console.log('Socket connected');
-      setIsConnected(true);
-
-      const numericGameId = parseInt(gameId || '');
-      if (isNaN(numericGameId)) return;
-
-      newSocket.emit('joinGame', {
-        gameId: numericGameId,
-        gameType: 'tictactoe'
+    if (!socket || !isConnected || joinGameEmitted.current) {
+      console.log('Skipping join game:', {
+        reason: !socket ? 'no socket' : !isConnected ? 'not connected' : 'already emitted',
+        socketId: socket?.id,
+        isConnected,
+        joinGameEmitted: joinGameEmitted.current
       });
-    };
+      return;
+    }
 
-    const handleDisconnect = () => {
-      console.log('Socket disconnected');
-      setIsConnected(false);
-    };
+    const numericGameId = parseInt(gameId || '');
+    if (isNaN(numericGameId)) {
+      console.log('Invalid game ID:', gameId);
+      return;
+    }
 
-    const handleConnectError = (error: Error) => {
-      console.error('Socket connection error:', error);
-      setIsConnected(false);
+    console.log('Emitting joinGame event from TicTacToeMultiplayerGameRoom:', {
+      socketId: socket.id,
+      gameId: numericGameId
+    });
+    socket.emit('joinGame', {
+      gameId: numericGameId,
+      gameType: 'tictactoe'
+    });
+    joinGameEmitted.current = true;
+
+    return () => {
+      console.log('Cleaning up join game effect:', {
+        socketId: socket?.id,
+        gameId,
+        wasEmitted: joinGameEmitted.current
+      });
+      // Don't reset joinGameEmitted here
     };
+  }, [socket, isConnected, gameId]);
+
+  // Set up game event handlers
+  useEffect(() => {
+    if (!socket || !isConnected) return;
 
     const handleGameState = (data: any) => {
-      console.log('Received game state:', data);
       // Convert 2D board state to 1D array for the TicTacToeBoard component
       const flatBoardState = data.boardState ? data.boardState.flat() : Array(9).fill('');
       
@@ -109,50 +125,26 @@ export const TicTacToeMultiplayerGameRoom: React.FC = () => {
       console.error('Socket error:', error);
     };
 
-    // Set up event handlers
-    newSocket.on('connect', handleConnect);
-    newSocket.on('disconnect', handleDisconnect);
-    newSocket.on('connect_error', handleConnectError);
-    newSocket.on('game-state', handleGameState);
-    newSocket.on('error', handleError);
+    // Remove any existing listeners before adding new ones
+    socket.off('game-state', handleGameState);
+    socket.off('error', handleError);
 
-    setSocket(newSocket);
+    socket.on('game-state', handleGameState);
+    socket.on('error', handleError);
 
     return () => {
-      newSocket.off('connect', handleConnect);
-      newSocket.off('disconnect', handleDisconnect);
-      newSocket.off('connect_error', handleConnectError);
-      newSocket.off('game-state', handleGameState);
-      newSocket.off('error', handleError);
-      newSocket.disconnect();
+      socket.off('game-state', handleGameState);
+      socket.off('error', handleError);
     };
-  }, [gameId]); // Only depend on gameId
+  }, [socket, isConnected]);
 
   const handleMove = (position: number) => {
-    console.log('Attempting move:', {
-      hasSocket: !!socket,
-      isGameActive: gameStatus.isActive,
-      currentPlayer: gameStatus.currentPlayer,
-      currentUserId,
-      position
-    });
-
-    if (!socket || !gameStatus.isActive) {
-      console.log('Move blocked: No socket or game not active');
-      return;
-    }
-    if (gameStatus.currentPlayer !== currentUserId) {
-      console.log('Move blocked: Not your turn');
-      return;
-    }
+    if (!socket || !isConnected || !gameStatus.isActive) return;
+    if (gameStatus.currentPlayer !== currentUserId) return;
 
     const numericGameId = parseInt(gameId || '');
-    if (isNaN(numericGameId)) {
-      console.log('Move blocked: Invalid game ID');
-      return;
-    }
+    if (isNaN(numericGameId)) return;
 
-    console.log('Emitting move to server');
     socket.emit('makeMove', {
       gameId: numericGameId,
       position

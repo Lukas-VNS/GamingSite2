@@ -1,17 +1,25 @@
 import { Server } from 'socket.io';
 import { Game } from '@prisma/client';
 import { prisma } from '../../prisma/prisma';
-import { verifyTokenAndGetUserId } from '../middleware/Auth';
+import { verifyTokenAndGetUserId, verifyToken } from '../middleware/Auth';
 import { Socket } from 'socket.io';
+import { QueueManager } from '../controllers/QueueManager';
 
 export abstract class BaseGameServer {
   protected io: Server;
   protected abstract getTimeLimit(): number; // Child classes must implement this
   
   private handledSockets = new WeakMap<any, boolean>();
+  private static socketHandlersSetup = false;
+  private static eventHandlers = new WeakMap<any, boolean>();
+  private static joinedGames = new WeakMap<any, Set<number>>(); // Track which games each socket has joined
 
   constructor(io: Server) {
     this.io = io;
+    if (!BaseGameServer.socketHandlersSetup) {
+      this.setupSocketHandlers();
+      BaseGameServer.socketHandlersSetup = true;
+    }
   }
 
   // Game-specific logic to be implemented by each game
@@ -61,7 +69,27 @@ export abstract class BaseGameServer {
 
   public async handleJoinGame(userId: string, data: { gameId: number; gameType: string }) {
     try {
-      const { gameId } = data;
+      const { gameId, gameType } = data;
+      
+      // Get the socket for this user
+      const userSocket = Array.from(this.io.sockets.sockets.values()).find(
+        s => s.data.userId === userId
+      );
+
+      if (!userSocket) {
+        throw new Error('Socket not found');
+      }
+
+      // Check if this socket has already joined this game
+      if (!BaseGameServer.joinedGames.has(userSocket)) {
+        BaseGameServer.joinedGames.set(userSocket, new Set());
+      }
+      const socketGames = BaseGameServer.joinedGames.get(userSocket);
+      if (socketGames?.has(gameId)) {
+        console.log('Socket already joined this game:', { socketId: userSocket.id, userId, gameId });
+        return; // Skip if already joined
+      }
+      socketGames?.add(gameId);
       
       // Get the game with player information and moves
       const game = await prisma.game.findUnique({
@@ -91,6 +119,11 @@ export abstract class BaseGameServer {
         throw new Error('Game not found');
       }
 
+      // Verify the game type matches
+      if (game.gameType !== gameType) {
+        throw new Error(`Invalid game type. Expected ${game.gameType} but got ${gameType}`);
+      }
+
       // Verify the user is one of the players
       if (game.player1Id !== userId && game.player2Id !== userId) {
         throw new Error('You are not a player in this game');
@@ -108,8 +141,6 @@ export abstract class BaseGameServer {
         // Get the current game state
         const gameState = await this.checkGameState(game);
 
-        // Send the initial game state to the player
-        console.log('Emitting initial game state:', gameState);
         // Emit to the specific socket first
         socket.emit('game-state', gameState);
         // Then emit to the room to update all players
@@ -204,15 +235,12 @@ export abstract class BaseGameServer {
   // Setup socket event handlers
   public setupSocketHandlers() {
     this.io.on('connection', (socket) => {
-      // Skip if we've already handled this socket
-      if (this.handledSockets.has(socket)) {
-        return;
-      }
-      this.handledSockets.set(socket, true);
+      console.log('New socket connection in BaseGameServer:', socket.id);
 
       // Get the JWT token from the handshake
       const token = socket.handshake.auth.token;
       if (!token) {
+        console.log('No token provided for socket:', socket.id);
         socket.emit('error', 'No authentication token provided');
         return;
       }
@@ -220,6 +248,7 @@ export abstract class BaseGameServer {
       // Verify token and get userId
       const userId = verifyTokenAndGetUserId(token);
       if (!userId) {
+        console.log('Invalid token for socket:', socket.id);
         socket.emit('error', 'Invalid token');
         return;
       }
@@ -228,29 +257,75 @@ export abstract class BaseGameServer {
       socket.handshake.auth.userId = userId;
       socket.data.userId = userId; // Also set it in socket.data for easier access
 
-      console.log('Socket connected with userId:', userId);
+      console.log('Socket authenticated in BaseGameServer:', { socketId: socket.id, userId });
 
-      // Now we can use the verified userId for their events
-      socket.on('joinGame', (data) => {
-        console.log('Received joinGame event:', data);
-        this.handleJoinGame(userId, data).catch(error => {
-          console.error('Error in joinGame handler:', error);
-          socket.emit('error', error.message);
+      // Handle queue events
+      if (!BaseGameServer.eventHandlers.has(socket)) {
+        BaseGameServer.eventHandlers.set(socket, true);
+
+        socket.on('join-queue', async (data: { gameType: 'tictactoe' | 'connect4', token: string }) => {
+          try {
+            console.log('Received join-queue event in BaseGameServer:', { socketId: socket.id, userId, gameType: data.gameType });
+            const decoded = await verifyToken(data.token);
+            if (!decoded) {
+              console.log('Invalid queue token for socket:', socket.id);
+              socket.emit('error', { message: 'Invalid token' });
+              return;
+            }
+
+            // Get user info from database
+            const user = await prisma.user.findUnique({
+              where: { id: decoded.userId },
+              select: { id: true, username: true }
+            });
+
+            if (!user) {
+              console.log('User not found for queue join:', { socketId: socket.id, userId: decoded.userId });
+              socket.emit('error', { message: 'User not found' });
+              return;
+            }
+
+            await QueueManager.getInstance(this.io).joinQueue(socket, user.id, user.username, data.gameType);
+            console.log('User joined queue in BaseGameServer:', { socketId: socket.id, userId: user.id, username: user.username, gameType: data.gameType });
+          } catch (error) {
+            console.error('Error joining queue in BaseGameServer:', { socketId: socket.id, userId, error });
+            socket.emit('error', { message: error instanceof Error ? error.message : 'Unknown error' });
+          }
         });
-      });
 
-      socket.on('makeMove', (data) => {
-        console.log('Received makeMove event:', data);
-        this.handleMakeMove(socket, data).catch(error => {
-          console.error('Error in makeMove handler:', error);
-          socket.emit('error', error.message);
+        socket.on('leave-queue', (data: { gameType: 'tictactoe' | 'connect4' }) => {
+          console.log('Received leave-queue event in BaseGameServer:', { socketId: socket.id, userId, gameType: data.gameType });
+          QueueManager.getInstance(this.io).leaveQueue(socket.id, data.gameType);
         });
-      });
 
-      // Clean up on disconnect
-      socket.on('disconnect', () => {
-        this.handledSockets.delete(socket);
-      });
+        // Handle game events
+        socket.on('joinGame', (data) => {
+          console.log('Received joinGame event in BaseGameServer:', { socketId: socket.id, userId, gameId: data.gameId });
+          this.handleJoinGame(userId, data).catch(error => {
+            console.error('Error in joinGame handler in BaseGameServer:', { socketId: socket.id, userId, error });
+            socket.emit('error', error.message);
+          });
+        });
+
+        socket.on('makeMove', (data) => {
+          console.log('Received makeMove event in BaseGameServer:', { socketId: socket.id, userId, gameId: data.gameId, position: data.position });
+          this.handleMakeMove(socket, data).catch(error => {
+            console.error('Error in makeMove handler in BaseGameServer:', { socketId: socket.id, userId, error });
+            socket.emit('error', error.message);
+          });
+        });
+
+        // Clean up on disconnect
+        socket.on('disconnect', () => {
+          console.log('Socket disconnected in BaseGameServer:', { socketId: socket.id, userId });
+          // Remove from all queues on disconnect
+          QueueManager.getInstance(this.io).leaveQueue(socket.id, 'tictactoe');
+          QueueManager.getInstance(this.io).leaveQueue(socket.id, 'connect4');
+          this.handledSockets.delete(socket);
+          BaseGameServer.eventHandlers.delete(socket);
+          BaseGameServer.joinedGames.delete(socket); // Clean up joined games tracking
+        });
+      }
     });
 
     // Set up periodic game state check

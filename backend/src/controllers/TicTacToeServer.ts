@@ -78,6 +78,15 @@ export class TicTacToeServer extends BaseGameServer {
       board[move.position] = move.playerNumber === 1 ? '1' : '2';
     });
 
+    // Convert to 2D array for validation
+    const board2D = this.convertTo2DArray(board);
+
+    // Validate board dimensions
+    if (!board2D || board2D.length !== 3 || board2D[0].length !== 3) {
+      console.error('Invalid board state:', board2D);
+      throw new Error('Invalid board state');
+    }
+
     const winner = this.checkWinner(board);
     const isDraw = !winner && board.every(cell => cell !== '');
 
@@ -103,7 +112,7 @@ export class TicTacToeServer extends BaseGameServer {
       isEnded: !!finalWinner || isDraw,
       winner: finalWinner ? (finalWinner === '1' ? gameWithPlayers.player1Id : gameWithPlayers.player2Id) : null,
       isDraw,
-      boardState: this.convertTo2DArray(board),
+      boardState: board2D,
       currentPlayer: gameWithPlayers.nextPlayer === 1 ? gameWithPlayers.player1Id : gameWithPlayers.player2Id,
       player1Id: gameWithPlayers.player1Id,
       player2Id: gameWithPlayers.player2Id,

@@ -22,7 +22,6 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      console.log('Attempting login with:', { username: formData.username });
       
       const response = await fetch(endpoints.login, {
         method: 'POST',
@@ -33,7 +32,6 @@ const LoginPage: React.FC = () => {
       });
 
       const data = await response.json();
-      console.log('Login response:', { status: response.status, data });
 
       if (!response.ok) {
         throw new Error(data.message || 'Login failed');
@@ -44,7 +42,6 @@ const LoginPage: React.FC = () => {
       }
 
       localStorage.setItem('token', data.token);
-      console.log('Token stored in localStorage');
       
       navigate('/');
     } catch (err) {

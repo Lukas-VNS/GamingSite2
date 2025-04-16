@@ -25,7 +25,6 @@ export const signup = async (
 ): Promise<void> => {
   try {
     const { username, password } = req.body;
-    console.log('Signup attempt for:', { username });
 
     // Check if username already exists
     const existingUser = await prisma.user.findFirst({
@@ -33,14 +32,12 @@ export const signup = async (
     });
 
     if (existingUser) {
-      console.log('Username already exists:', { username });
       res.status(400).json({ message: 'Username already exists' });
       return;
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log('Password hashed successfully');
 
     // Create user
     const user = await prisma.user.create({
@@ -49,7 +46,6 @@ export const signup = async (
         password: hashedPassword
       }
     });
-    console.log('User created successfully:', { id: user.id });
 
     // Generate JWT token
     const token = jwt.sign(
@@ -78,10 +74,8 @@ export const login = async (
 ): Promise<void> => {
   try {
     const { username, password } = req.body;
-    console.log('Login attempt for:', { username });
 
     if (!username || !password) {
-      console.log('Missing credentials:', { username: !!username, password: !!password });
       res.status(400).json({ message: 'Username and password are required' });
       return;
     }
@@ -91,17 +85,13 @@ export const login = async (
       where: { username }
     });
 
-    console.log('User found:', user ? { id: user.id, username: user.username } : 'No user found');
-
     if (!user) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
     }
 
     // Check password
-    console.log('Comparing passwords...');
     const isValidPassword = await bcrypt.compare(password, user.password);
-    console.log('Password valid:', isValidPassword);
 
     if (!isValidPassword) {
       res.status(401).json({ message: 'Invalid credentials' });
@@ -114,8 +104,6 @@ export const login = async (
       JWT_SECRET,
       { expiresIn: '24h' }
     );
-
-    console.log('Login successful for user:', { id: user.id, username: user.username });
 
     res.json({
       message: 'Login successful',

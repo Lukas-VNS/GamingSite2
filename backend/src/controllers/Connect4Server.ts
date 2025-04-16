@@ -22,7 +22,7 @@ export class Connect4Server extends BaseGameServer {
     });
 
     // Initialize empty board
-    const board: Connect4Board = Array(6).fill(null).map(() => Array(7).fill(''));
+    const board: Connect4Board = Array(6).fill('').map(() => Array(7).fill(''));
 
     // Reconstruct board from moves
     moves.forEach(move => {
@@ -75,7 +75,7 @@ export class Connect4Server extends BaseGameServer {
     }
 
     // Initialize empty board
-    const board: Connect4Board = Array(6).fill(null).map(() => Array(7).fill(''));
+    const board: Connect4Board = Array(6).fill('').map(() => Array(7).fill(''));
 
     // Reconstruct board from moves
     gameWithPlayers.moves.forEach(move => {
@@ -87,6 +87,12 @@ export class Connect4Server extends BaseGameServer {
         board[row][move.position] = move.playerNumber === 1 ? '1' : '2';
       }
     });
+
+    // Validate board dimensions
+    if (!board || board.length !== 6 || board[0].length !== 7) {
+      console.error('Invalid board state:', board);
+      throw new Error('Invalid board state');
+    }
 
     const winner = this.checkWinner(board);
     const isDraw = !winner && board.every(row => row.every(cell => cell !== ''));
@@ -189,7 +195,7 @@ export class Connect4Server extends BaseGameServer {
     });
 
     // Initialize empty board
-    const board: Connect4Board = Array(6).fill(null).map(() => Array(7).fill(''));
+    const board: Connect4Board = Array(6).fill('').map(() => Array(7).fill(''));
 
     // Reconstruct board from moves
     moves.forEach(move => {

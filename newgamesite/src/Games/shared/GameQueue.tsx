@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
+import { useGameSocket } from '../../context/GameSocketContext';
 
 interface GameQueueProps {
   gameType: 'tictactoe' | 'connect4';
@@ -24,48 +24,30 @@ const GameQueue: React.FC<GameQueueProps> = ({
   const [isInQueue, setIsInQueue] = useState(false);
   const [error, setError] = useState<string>('');
   const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
-  const [socket, setSocket] = useState<ReturnType<typeof io> | null>(null);
+  const { socket, isConnected } = useGameSocket();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('Not authenticated');
-      return;
-    }
+    if (!socket) return;
 
-    // Initialize socket connection
-    const newSocket = io(process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080', {
-      auth: {
-        token
-      }
-    });
-
-    newSocket.on('connect', () => {
-      console.log('Connected to queue server');
-    });
-
-    newSocket.on('queue-update', (status: QueueStatus) => {
+    socket.on('queue-update', (status: QueueStatus) => {
       setQueueStatus(status);
     });
 
-    newSocket.on('game-found', (data: { gameId: string; opponent: string }) => {
+    socket.on('game-found', (data: { gameId: string; opponent: string }) => {
       navigate(`${gamePath}/${data.gameId}`);
     });
 
-    newSocket.on('error', (error: { message: string }) => {
+    socket.on('error', (error: { message: string }) => {
       setError(error.message);
       setIsInQueue(false);
     });
 
-    setSocket(newSocket);
-
-    // Cleanup on unmount
     return () => {
-      if (newSocket) {
-        newSocket.disconnect();
-      }
+      socket.off('queue-update');
+      socket.off('game-found');
+      socket.off('error');
     };
-  }, [gamePath, navigate]);
+  }, [socket, gamePath, navigate]);
 
   const handleJoinQueue = () => {
     const token = localStorage.getItem('token');
@@ -74,7 +56,7 @@ const GameQueue: React.FC<GameQueueProps> = ({
       return;
     }
 
-    if (!socket) {
+    if (!socket || !isConnected) {
       setError('Not connected to server');
       return;
     }
@@ -85,7 +67,7 @@ const GameQueue: React.FC<GameQueueProps> = ({
   };
 
   const handleCancelQueue = () => {
-    if (!socket) {
+    if (!socket || !isConnected) {
       setError('Not connected to server');
       return;
     }

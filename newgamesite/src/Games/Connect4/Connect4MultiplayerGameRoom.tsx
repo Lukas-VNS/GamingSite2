@@ -1,18 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MultiplayerGameRoom from '../shared/MultiplayerGameRoom';
 import Connect4Board from './Connect4Board';
 import { useParams } from 'react-router-dom';
-import io from 'socket.io-client';
+import { useGameSocket } from '../../context/GameSocketContext';
 
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080';
 const BOARD_WIDTH = 7;
 const BOARD_HEIGHT = 6;
 const TIME_LIMIT = 60 * 3;
+
 export const Connect4MultiplayerGameRoom: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [socket, setSocket] = useState<typeof io.Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const { socket, isConnected } = useGameSocket();
   const [gameStatus, setGameStatus] = useState({
     isActive: false,
     isEnded: false,
@@ -28,64 +27,84 @@ export const Connect4MultiplayerGameRoom: React.FC = () => {
       username: 'Waiting for player...'
     },
     boardState: Array(BOARD_HEIGHT).fill(null).map(() => Array(BOARD_WIDTH).fill(null)),
-    player1Time: TIME_LIMIT, // 2 minutes for Connect4
+    player1Time: TIME_LIMIT,
     player2Time: TIME_LIMIT
   });
+  const hasJoinedGame = useRef(false);
+  const joinGameEmitted = useRef(false);
 
-  // Get current user ID from token and set up socket
+  // Get current user ID from token
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) {
-      console.log('Not authenticated');
-      return;
-    }
+    if (!token) return;
 
     const payload = JSON.parse(atob(token.split('.')[1]));
     setCurrentUserId(payload.userId);
+  }, []);
 
-    const newSocket = io(API_BASE_URL, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+  // Handle joining the game
+  useEffect(() => {
+    console.log('Join game effect running:', {
+      socketId: socket?.id,
+      isConnected,
+      gameId,
+      hasJoined: hasJoinedGame.current,
+      joinGameEmitted: joinGameEmitted.current
     });
 
-    const handleConnect = () => {
-      console.log('Socket connected');
-      setIsConnected(true);
-
-      const numericGameId = parseInt(gameId || '');
-      if (isNaN(numericGameId)) return;
-
-      newSocket.emit('joinGame', {
-        gameId: numericGameId,
-        gameType: 'connect4'
+    if (!socket || !isConnected || joinGameEmitted.current) {
+      console.log('Skipping join game:', {
+        reason: !socket ? 'no socket' : !isConnected ? 'not connected' : 'already emitted',
+        socketId: socket?.id,
+        isConnected,
+        joinGameEmitted: joinGameEmitted.current
       });
-    };
+      return;
+    }
 
-    const handleDisconnect = () => {
-      console.log('Socket disconnected');
-      setIsConnected(false);
-    };
+    const numericGameId = parseInt(gameId || '');
+    if (isNaN(numericGameId)) {
+      console.log('Invalid game ID:', gameId);
+      return;
+    }
 
-    const handleConnectError = (error: Error) => {
-      console.error('Socket connection error:', error);
-      setIsConnected(false);
+    console.log('Emitting joinGame event from Connect4MultiplayerGameRoom:', {
+      socketId: socket.id,
+      gameId: numericGameId
+    });
+    socket.emit('joinGame', {
+      gameId: numericGameId,
+      gameType: 'connect4'
+    });
+    joinGameEmitted.current = true;
+
+    return () => {
+      console.log('Cleaning up join game effect:', {
+        socketId: socket?.id,
+        gameId,
+        wasEmitted: joinGameEmitted.current
+      });
+      // Don't reset joinGameEmitted here
     };
+  }, [socket, isConnected, gameId]);
+
+  // Set up game event handlers
+  useEffect(() => {
+    if (!socket || !isConnected) return;
 
     const handleGameState = (data: any) => {
       console.log('Received game state:', data);
       
-      // Parse board state if it's a string
-      const boardState = typeof data.boardState === 'string' 
-        ? JSON.parse(data.boardState)
-        : data.boardState;
+      // Ensure board state has correct dimensions
+      if (!data.boardState || !Array.isArray(data.boardState) || data.boardState.length !== BOARD_HEIGHT) {
+        console.error('Invalid board state received:', data.boardState);
+        data.boardState = Array(BOARD_HEIGHT).fill(null).map(() => Array(BOARD_WIDTH).fill(null));
+      }
 
       // Check if the game has ended due to time
       const isTimeBasedWin = data.player1Time <= 0 || data.player2Time <= 0;
       const timeBasedWinner = data.player1Time <= 0 ? data.player2Id : 
-                             data.player2Time <= 0 ? data.player1Id : null;
+                            data.player2Time <= 0 ? data.player1Id : null;
 
       setGameStatus(prev => ({
         ...prev,
@@ -103,7 +122,7 @@ export const Connect4MultiplayerGameRoom: React.FC = () => {
           id: data.player2Id,
           username: data.player2.username
         } : prev.player2,
-        boardState: boardState,
+        boardState: data.boardState,
         player1Time: data.player1Time || prev.player1Time,
         player2Time: data.player2Time || prev.player2Time
       }));
@@ -113,33 +132,26 @@ export const Connect4MultiplayerGameRoom: React.FC = () => {
       console.error('Socket error:', error);
     };
 
-    // Set up event handlers
-    newSocket.on('connect', handleConnect);
-    newSocket.on('disconnect', handleDisconnect);
-    newSocket.on('connect_error', handleConnectError);
-    newSocket.on('game-state', handleGameState);
-    newSocket.on('error', handleError);
+    // Remove any existing listeners before adding new ones
+    socket.off('game-state', handleGameState);
+    socket.off('error', handleError);
 
-    setSocket(newSocket);
+    socket.on('game-state', handleGameState);
+    socket.on('error', handleError);
 
     return () => {
-      newSocket.off('connect', handleConnect);
-      newSocket.off('disconnect', handleDisconnect);
-      newSocket.off('connect_error', handleConnectError);
-      newSocket.off('game-state', handleGameState);
-      newSocket.off('error', handleError);
-      newSocket.disconnect();
+      socket.off('game-state', handleGameState);
+      socket.off('error', handleError);
     };
-  }, [gameId]); // Only depend on gameId
+  }, [socket, isConnected]);
 
   const handleMove = (column: number) => {
-    if (!socket || !gameStatus.isActive) return;
+    if (!socket || !isConnected || !gameStatus.isActive) return;
     if (gameStatus.currentPlayer !== currentUserId) return;
 
     // Check if the column has an empty space
     const columnHasSpace = gameStatus.boardState.some(row => row[column] === '');
     if (!columnHasSpace) {
-      console.log('Column is full');
       return;
     }
 
