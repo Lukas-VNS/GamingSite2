@@ -54,7 +54,12 @@ export const getGameById = async (req: Request, res: Response): Promise<void> =>
       where: { id: parseInt(gameId) },
       include: {
         player1: true,
-        player2: true
+        player2: true,
+        moves: {
+          orderBy: {
+            playedAt: 'asc'
+          }
+        }
       }
     });
 
@@ -63,9 +68,15 @@ export const getGameById = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    // Reconstruct board state from moves
+    const boardState = Array(9).fill('');
+    game.moves.forEach(move => {
+      boardState[move.position] = move.playerNumber === 1 ? '1' : '2';
+    });
+
     res.json({
       id: game.id,
-      boardState: game.boardState,
+      boardState,
       nextPlayer: game.nextPlayer,
       state: game.state,
       player1: {
@@ -93,7 +104,12 @@ export const getConnect4GameById = async (req: Request, res: Response): Promise<
       where: { id: parseInt(gameId) },
       include: {
         player1: true,
-        player2: true
+        player2: true,
+        moves: {
+          orderBy: {
+            playedAt: 'asc'
+          }
+        }
       }
     });
 
@@ -102,9 +118,21 @@ export const getConnect4GameById = async (req: Request, res: Response): Promise<
       return;
     }
 
+    // Reconstruct Connect 4 board state from moves
+    const boardState = Array(6).fill(null).map(() => Array(7).fill(''));
+    game.moves.forEach(move => {
+      let row = 5;
+      while (row >= 0 && boardState[row][move.position] !== '') {
+        row--;
+      }
+      if (row >= 0) {
+        boardState[row][move.position] = move.playerNumber === 1 ? '1' : '2';
+      }
+    });
+
     res.json({
       id: game.id,
-      boardState: game.boardState,
+      boardState,
       nextPlayer: game.nextPlayer,
       state: game.state,
       player1: {

@@ -1,8 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useSocket } from '../../context/SocketContext';
-
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080';
 
 interface GameStatus {
   isActive: boolean;
@@ -18,167 +14,65 @@ interface GameStatus {
     id: string;
     username: string;
   };
-  boardState?: any; // This will be game-specific
+  boardState?: any;
+  player1Time: number;
+  player2Time: number;
 }
 
 interface MultiplayerGameRoomProps {
-  gameType: 'tictactoe' | 'connect4';
+  gameType: string;
   title: string;
-  children: React.ReactElement<{
-    boardState?: any;
-    onMove?: (position: number) => void;
-    isActive?: boolean;
-    currentPlayer?: string;
-    currentUserId?: string;
-  }>;
-  onMove?: (position: number) => void;
+  gameStatus: GameStatus;
+  currentUserId: string;
+  children: React.ReactNode;
+  player1Symbol: string;
+  player2Symbol: string;
 }
+
+const formatTime = (seconds: number, isGameEnded: boolean): string => {
+  // If game is ended and time is very close to 0, show 0:00
+  if (isGameEnded && seconds < 1) {
+    return '0:00';
+  }
+  const roundedSeconds = Math.floor(seconds); // Use floor instead of round to be more conservative
+  const mins = Math.floor(roundedSeconds / 60);
+  const secs = roundedSeconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 
 export const MultiplayerGameRoom: React.FC<MultiplayerGameRoomProps> = ({
   gameType,
   title,
+  gameStatus,
+  currentUserId,
   children,
-  onMove
+  player1Symbol,
+  player2Symbol
 }) => {
-  const { gameId } = useParams<{ gameId: string }>();
-  const [currentUserId, setCurrentUserId] = useState<string>('');
-  const { socket, isConnected } = useSocket();
-  const [gameStatus, setGameStatus] = useState<GameStatus>({
-    isActive: false,
-    isEnded: false,
-    player1: {
-      id: '',
-      username: 'Waiting for player...',
-    },
-    player2: {
-      id: '',
-      username: 'Waiting for player...',
-    }
-  });
+  const [player1Time, setPlayer1Time] = useState(gameStatus.player1Time);
+  const [player2Time, setPlayer2Time] = useState(gameStatus.player2Time);
 
-  // Get the current user's ID from the token
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      setCurrentUserId(payload.userId);
-    }
-  }, []);
+    setPlayer1Time(gameStatus.player1Time);
+    setPlayer2Time(gameStatus.player2Time);
+  }, [gameStatus.player1Time, gameStatus.player2Time]);
 
-  // Set up game state management
   useEffect(() => {
-    const numericGameId = parseInt(gameId || '');
-    
-    if (isNaN(numericGameId)) {
-      console.error('Invalid game ID');
-      return;
-    }
+    if (!gameStatus.isActive || gameStatus.isEnded) return;
 
-    if (!socket) {
-      console.log('Socket not initialized yet');
-      return;
-    }
+    const timer = setInterval(() => {
+      if (gameStatus.currentPlayer === gameStatus.player1?.id) {
+        setPlayer1Time(prev => Math.max(0, prev - 1));
+      } else if (gameStatus.currentPlayer === gameStatus.player2?.id) {
+        setPlayer2Time(prev => Math.max(0, prev - 1));
+      }
+    }, 1000);
 
-    if (!isConnected) {
-      console.log('Waiting for socket connection...');
-      return;
-    }
-
-    console.log('Socket connected, joining game:', numericGameId);
-    socket.emit('joinGame', {
-      gameId: numericGameId,
-      gameType
-    });
-
-    const handleGameState = (data: any) => {
-      console.log('Received game state:', data);
-      console.log('Current user ID:', currentUserId);
-      console.log('Next player:', data.nextPlayer);
-      console.log('Player 1 ID:', data.player1Id);
-      console.log('Player 2 ID:', data.player2Id);
-      console.log('Player 1 username:', data.player1?.username);
-      console.log('Player 2 username:', data.player2?.username);
-      
-      const isPlayer1 = data.player1Id === currentUserId;
-      const isPlayer2 = data.player2Id === currentUserId;
-      const isCurrentPlayer = (data.nextPlayer === 1 && isPlayer1) || (data.nextPlayer === 2 && isPlayer2);
-      
-      console.log('Is current player:', isCurrentPlayer);
-      
-      setGameStatus({
-        isActive: data.state === 'ACTIVE',
-        isEnded: data.state === 'PLAYER1_WIN' || data.state === 'PLAYER2_WIN' || data.state === 'DRAW',
-        isDraw: data.state === 'DRAW',
-        winner: data.state === 'PLAYER1_WIN' ? data.player1Id : 
-                data.state === 'PLAYER2_WIN' ? data.player2Id : null,
-        currentPlayer: data.nextPlayer === 1 ? data.player1Id : data.player2Id,
-        player1: data.player1 ? {
-          id: data.player1Id,
-          username: data.player1.username
-        } : {
-          id: data.player1Id,
-          username: 'Waiting for player...'
-        },
-        player2: data.player2 ? {
-          id: data.player2Id,
-          username: data.player2.username
-        } : {
-          id: data.player2Id,
-          username: 'Waiting for player...'
-        },
-        boardState: data.boardState
-      });
-    };
-
-    const handleError = (error: any) => {
-      console.error('Socket error:', error);
-    };
-
-    socket.on('game-state', handleGameState);
-    socket.on('error', handleError);
-
-    return () => {
-      socket.off('game-state', handleGameState);
-      socket.off('error', handleError);
-    };
-  }, [gameId, gameType, currentUserId, socket, isConnected]);
-
-  const handleMove = (position: number) => {
-    if (!socket || !gameStatus.isActive) {
-      console.log('Cannot make move: Game not active or socket not connected');
-      return;
-    }
-    
-    if (gameStatus.currentPlayer !== currentUserId) {
-      console.log('Cannot make move: Not your turn');
-      console.log('Current player:', gameStatus.currentPlayer);
-      console.log('Your ID:', currentUserId);
-      return;
-    }
-
-    console.log('Making move at position:', position);
-    socket.emit('makeMove', {
-      gameId: parseInt(gameId || ''),
-      position
-    });
-  };
-
-  // Pass the game state and move handler to children
-  const childrenWithProps = React.Children.map(children, child => {
-    if (React.isValidElement(child)) {
-      return React.cloneElement(child, {
-        boardState: gameStatus.boardState,
-        onMove: handleMove,
-        isActive: gameStatus.isActive,
-        currentPlayer: gameStatus.currentPlayer,
-        currentUserId
-      });
-    }
-    return child;
-  });
+    return () => clearInterval(timer);
+  }, [gameStatus.isActive, gameStatus.isEnded, gameStatus.currentPlayer, gameStatus.player1?.id, gameStatus.player2?.id]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white py-16 px-4">
+    <div className="flex flex-col items-center min-h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white py-16 px-4">
       <div className="max-w-4xl mx-auto text-center">
         <h1 className="text-4xl font-bold mb-8 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
           {title}
@@ -189,14 +83,22 @@ export const MultiplayerGameRoom: React.FC<MultiplayerGameRoomProps> = ({
           {gameStatus.player1 && gameStatus.player2 && (
             <div className="flex justify-between items-center mb-4">
               <div className={`text-center flex-1 p-3 rounded-lg ${gameStatus.currentPlayer === gameStatus.player1.id ? 'bg-blue-500/10' : ''}`}>
+                <div className="text-2xl font-bold mb-2">{player1Symbol}</div>
                 <div className={`font-bold ${gameStatus.currentPlayer === gameStatus.player1.id ? 'text-blue-400' : 'text-gray-300'} ${gameStatus.player1.id === currentUserId ? 'underline' : ''}`}>
                   {gameStatus.player1.id === currentUserId ? 'You: ' : ''}{gameStatus.player1.username}
+                </div>
+                <div className={`text-lg mt-2 ${player1Time < 10 ? 'text-red-500' : 'text-white'}`}>
+                  {formatTime(player1Time, gameStatus.isEnded)}
                 </div>
               </div>
               <div className="mx-4 text-gray-500">vs</div>
               <div className={`text-center flex-1 p-3 rounded-lg ${gameStatus.currentPlayer === gameStatus.player2.id ? 'bg-purple-500/10' : ''}`}>
+                <div className="text-2xl font-bold mb-2">{player2Symbol}</div>
                 <div className={`font-bold ${gameStatus.currentPlayer === gameStatus.player2.id ? 'text-purple-400' : 'text-gray-300'} ${gameStatus.player2.id === currentUserId ? 'underline' : ''}`}>
                   {gameStatus.player2.id === currentUserId ? 'You: ' : ''}{gameStatus.player2.username}
+                </div>
+                <div className={`text-lg mt-2 ${player2Time < 10 ? 'text-red-500' : 'text-white'}`}>
+                  {formatTime(player2Time, gameStatus.isEnded)}
                 </div>
               </div>
             </div>
@@ -210,8 +112,8 @@ export const MultiplayerGameRoom: React.FC<MultiplayerGameRoomProps> = ({
           )}
 
           {/* Game Board */}
-          <div className="mb-6">
-            {childrenWithProps}
+          <div>
+            {children}
           </div>
 
           {/* End game section */}
@@ -244,12 +146,6 @@ export const MultiplayerGameRoom: React.FC<MultiplayerGameRoomProps> = ({
       </div>
     </div>
   );
-};
-
-const formatTime = (seconds: number): string => {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
 export default MultiplayerGameRoom; 

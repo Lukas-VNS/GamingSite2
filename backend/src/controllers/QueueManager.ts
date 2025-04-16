@@ -83,7 +83,6 @@ export class QueueManager {
       const game = await prisma.game.create({
         data: {
           gameType,
-          boardState: gameType === 'tictactoe' ? Array(9).fill(null) : Array(42).fill(null),
           nextPlayer: 1,
           state: 'ACTIVE',
           player1Id: player1.userId,

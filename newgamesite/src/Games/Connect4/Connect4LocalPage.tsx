@@ -24,7 +24,7 @@ const Connect4LocalPage: React.FC = () => {
     if (position === null) return board;
 
     const [row, column] = position;
-    newBoard[row][column] = isPlayer1Next ? 'player1' : 'player2';
+    newBoard[row][column] = isPlayer1Next ? '1' : '2';
     return newBoard;
   };
 

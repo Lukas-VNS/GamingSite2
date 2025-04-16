@@ -19,7 +19,6 @@ model Game {
   id            Int       @id @default(autoincrement())
   createdAt     DateTime  @default(now())
   gameType      String    // 'tic-tac-toe' or 'connect4'
-  boardState    Json      // Stores the game board state (either 3x3 or 6x7 grid)
   nextPlayer    Int       // 1 or 2 (referring to player1 or player2)
   state         GameState @default(WAITING)
   moves         Move[]    // Game history

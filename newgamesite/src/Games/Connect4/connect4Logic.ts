@@ -1,11 +1,11 @@
-export type PlayerSymbol = 'player1' | 'player2';
+export type PlayerSymbol = '1' | '2' | null;
 export type GameStatus = 'waiting' | 'active' | 'ended' | 'draw';
 
 export type GameState = {
   id: number;
   board: string[][];
   boardState?: number[][];
-  nextPlayer: 'player1' | 'player2';
+  nextPlayer: '1' | '2';
   gameStatus: 'waiting' | 'active' | 'ended' | 'draw';
   winner: string | null;
   player1?: {
@@ -90,7 +90,7 @@ export function isValidMove(squares: Array<PlayerSymbol | null>, position: numbe
 }
 
 export function getNextPlayer(currentPlayer: PlayerSymbol): PlayerSymbol {
-  return currentPlayer === 'player1' ? 'player2' : 'player1';
+  return currentPlayer === '1' ? '2' : '1';
 }
 
 export function isPlayerTurn(
@@ -99,7 +99,7 @@ export function isPlayerTurn(
   playerSymbol: PlayerSymbol
 ): boolean {
   const isPlayer1 = gameState.player1Id === currentUserId;
-  return (isPlayer1 && playerSymbol === 'player1') || (!isPlayer1 && playerSymbol === 'player2');
+  return (isPlayer1 && playerSymbol === '1') || (!isPlayer1 && playerSymbol === '2');
 }
 
 export function getLowestEmptyPosition(board: Array<Array<PlayerSymbol | null>>, col: number): [number, number] | null {

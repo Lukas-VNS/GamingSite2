@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { SocketProvider } from './context/SocketContext';
 import Layout from './Layout';
 import HomePage from './HomePage';
 import LoginPage from './Auth/LoginPage';
@@ -17,7 +16,6 @@ import Connect4MultiplayerGameRoom from './Games/Connect4/Connect4MultiplayerGam
 
 function App() {
   return (
-    <SocketProvider>
       <Router>
         <Layout>
           <Routes>
@@ -70,7 +68,6 @@ function App() {
           </Routes>
         </Layout>
       </Router>
-    </SocketProvider>
   );
 }
 
